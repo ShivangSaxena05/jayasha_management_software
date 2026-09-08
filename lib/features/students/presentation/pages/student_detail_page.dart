@@ -8,9 +8,10 @@ import 'package:jayasha_childrens_academy/features/students/domain/repositories/
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
 import 'package:jayasha_childrens_academy/core/models/academic_session.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
-import 'package:jayasha_childrens_academy/features/attendance/data/repositories/attendance_repository.dart';
 import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_repository.dart';
+import 'package:jayasha_childrens_academy/features/fees/presentation/widgets/add_payment_dialog.dart';
 import 'package:intl/intl.dart';
+import 'package:collection/collection.dart';
 
 class StudentDetailPage extends StatefulWidget {
   final StudentAdmission student;
@@ -27,8 +28,6 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
   bool _isLoadingFees = false;
   bool _isEditing = false;
   bool _isSaving = false;
-  bool _isLoadingAttendance = false;
-  Map<String, dynamic>? _attendanceData;
   fee_domain.FeeRepository? _feeRepo;
 
   // Controllers for editing
@@ -45,43 +44,14 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _initControllers();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _feeRepo = Provider.of<fee_domain.FeeRepository>(context, listen: false);
       _feeRepo?.addListener(_fetchFeeHistory);
       _fetchFeeHistory();
-      _fetchAttendanceReport();
     });
-  }
-
-  Future<void> _fetchAttendanceReport() async {
-    if (!mounted) return;
-    setState(() => _isLoadingAttendance = true);
-    try {
-      final attRepo = Provider.of<AttendanceRepository>(context, listen: false);
-      // Fetch for last 30 days by default
-      final now = DateTime.now();
-      final startDate = DateFormat('yyyy-MM-dd').format(now.subtract(const Duration(days: 30)));
-      final endDate = DateFormat('yyyy-MM-dd').format(now);
-
-      final result = await attRepo.getStudentAttendanceReport(
-        studentId: widget.student.id!,
-        startDate: startDate,
-        endDate: endDate,
-      );
-
-      if (mounted && result['success'] == true) {
-        setState(() {
-          _attendanceData = result['data'];
-          _isLoadingAttendance = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetching attendance report: $e');
-      if (mounted) setState(() => _isLoadingAttendance = false);
-    }
   }
 
   @override
@@ -214,7 +184,6 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
           tabs: const [
             Tab(text: 'Details', icon: Icon(Icons.person_outline)),
             Tab(text: 'Fees', icon: Icon(Icons.payments_outlined)),
-            Tab(text: 'Attendance', icon: Icon(Icons.calendar_month_outlined)),
           ],
         ),
       ),
@@ -223,7 +192,6 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
         children: [
           _buildDetailsTab(),
           _buildFeesTab(),
-          _buildAttendanceTab(),
         ],
       ),
     );
@@ -294,7 +262,11 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               ElevatedButton.icon(
-                onPressed: () => _showAddFeeDialog(context),
+                onPressed: () => showAddPaymentDialog(
+                  context,
+                  prefilledStudent: widget.student,
+                  onSuccess: _fetchFeeHistory,
+                ),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add Payment'),
                 style: ElevatedButton.styleFrom(
@@ -334,339 +306,6 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
                 ),
         ),
       ],
-    );
-  }
-
-  void _showAddFeeDialog(BuildContext context) async {
-    final feeRepo = Provider.of<fee_domain.FeeRepository>(context, listen: false);
-    final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
-    final examRepo = Provider.of<ExamRepository>(context, listen: false);
-
-    AcademicSession? currentSession;
-    List<dynamic> feeStructures = [];
-    List<dynamic> exams = [];
-
-    try {
-      currentSession = await dashboardRepo.getCurrentSession();
-      if (currentSession != null) {
-        feeStructures = await feeRepo.getFeeStructures();
-        final examResponse = await examRepo.getExams(currentSession.id!);
-        if (examResponse['success'] == true) {
-          exams = examResponse['data'] ?? [];
-        }
-      }
-    } catch (e) {
-      debugPrint('Error preparing payment dialog: $e');
-    }
-
-    if (currentSession == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No active academic session found'), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
-
-    final TextEditingController amountController = TextEditingController();
-    PaymentMode selectedMode = PaymentMode.cash;
-    FeeCategory selectedCategory = FeeCategory.monthly;
-    bool isFullPayment = true;
-    String? selectedMonth;
-    String? selectedExamId;
-
-    final List<String> months = [
-      'April', 'May', 'June', 'July', 'August', 'September',
-      'October', 'November', 'December', 'January', 'February', 'March'
-    ];
-
-    if (context.mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => StatefulBuilder(
-          builder: (context, setDialogState) {
-            // Helper to get base amount from structure
-            double getBaseAmount(FeeCategory category) {
-              final classStructure = feeStructures.firstWhere(
-                (s) => s['class'] != null && (s['class']['_id'] == widget.student.currentClassId || s['class'] == widget.student.currentClassId),
-                orElse: () => null,
-              );
-
-              if (classStructure != null && classStructure['components'] != null) {
-                final components = classStructure['components'] as List;
-                dynamic component;
-
-                switch (category) {
-                  case FeeCategory.monthly:
-                    component = components.firstWhere((c) =>
-                      c['name'].toString().toLowerCase().contains('monthly') ||
-                      c['name'].toString().toLowerCase().contains('tuition'),
-                      orElse: () => null);
-                    break;
-                  case FeeCategory.admission:
-                    component = components.firstWhere((c) =>
-                      c['name'].toString().toLowerCase().contains('admission'),
-                      orElse: () => null);
-                    break;
-                  case FeeCategory.exam:
-                    component = components.firstWhere((c) =>
-                      c['name'].toString().toLowerCase().contains('exam'),
-                      orElse: () => null);
-                    break;
-                  default:
-                    break;
-                }
-
-                if (component != null) {
-                  return double.tryParse(component['amount'].toString()) ?? 0.0;
-                }
-              }
-              return 0.0;
-            }
-
-            void updateAmount() {
-              if (isFullPayment) {
-                amountController.text = getBaseAmount(selectedCategory).toString();
-              }
-            }
-
-            // Initial auto-fill
-            if (amountController.text.isEmpty && isFullPayment) {
-              updateAmount();
-            }
-
-            final totalFee = getBaseAmount(selectedCategory);
-            final enteredAmount = double.tryParse(amountController.text) ?? 0.0;
-            final dueAmount = totalFee - enteredAmount;
-
-            return AlertDialog(
-              title: const Text('Record Fee Payment'),
-              content: SizedBox(
-                width: 500,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Student Info Summary
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-                        ),
-                        child: Column(
-                          children: [
-                            _buildDialogInfoRow('Student', widget.student.name, isBold: true),
-                            _buildDialogInfoRow('Adm No', widget.student.admissionNumber),
-                            _buildDialogInfoRow('Class', '${widget.student.className ?? 'N/A'} ${widget.student.section ?? ''}'),
-                            _buildDialogInfoRow('Roll No', widget.student.rollNumber ?? 'N/A'),
-                            _buildDialogInfoRow('Father', widget.student.fatherName),
-                            _buildDialogInfoRow('Mother', widget.student.motherName),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Payment Category
-                      DropdownButtonFormField<FeeCategory>(
-                        value: selectedCategory,
-                        items: FeeCategory.values.map((e) => DropdownMenuItem(value: e, child: Text(e.name.toUpperCase()))).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setDialogState(() {
-                              selectedCategory = val;
-                              updateAmount();
-                            });
-                          }
-                        },
-                        decoration: const InputDecoration(labelText: 'Fee Category', border: OutlineInputBorder()),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Dynamic dropdowns based on category
-                      if (selectedCategory == FeeCategory.monthly) ...[
-                        DropdownButtonFormField<String>(
-                          value: selectedMonth,
-                          hint: const Text('Select Month'),
-                          items: months.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                          onChanged: (val) => setDialogState(() => selectedMonth = val),
-                          decoration: const InputDecoration(labelText: 'Month', border: OutlineInputBorder()),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      if (selectedCategory == FeeCategory.exam) ...[
-                        DropdownButtonFormField<String>(
-                          value: selectedExamId,
-                          hint: const Text('Select Exam'),
-                          items: exams.map((e) => DropdownMenuItem(value: e['_id'].toString(), child: Text(e['name']))).toList(),
-                          onChanged: (val) => setDialogState(() => selectedExamId = val),
-                          decoration: const InputDecoration(labelText: 'Exam', border: OutlineInputBorder()),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Payment Type Toggle
-                      const Text('Payment Option', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: RadioListTile<bool>(
-                              title: const Text('Full'),
-                              value: true,
-                              groupValue: isFullPayment,
-                              onChanged: (val) => setDialogState(() {
-                                isFullPayment = val!;
-                                updateAmount();
-                              }),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                          Expanded(
-                            child: RadioListTile<bool>(
-                              title: const Text('Partial'),
-                              value: false,
-                              groupValue: isFullPayment,
-                              onChanged: (val) => setDialogState(() => isFullPayment = val!),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      // Amount Entry
-                      TextField(
-                        controller: amountController,
-                        keyboardType: TextInputType.number,
-                        readOnly: isFullPayment,
-                        decoration: InputDecoration(
-                          labelText: isFullPayment ? 'Amount (Fixed)' : 'Enter Amount to Pay',
-                          border: const OutlineInputBorder(),
-                          filled: isFullPayment,
-                          fillColor: isFullPayment ? Colors.grey.shade100 : null,
-                          suffixIcon: isFullPayment ? const Icon(Icons.lock_outline, size: 20) : null,
-                        ),
-                        onChanged: (val) => setDialogState(() {}),
-                      ),
-                      if (!isFullPayment) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Total Fee: ₹$totalFee', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                            Text('Due: ₹${dueAmount.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: dueAmount > 0 ? Colors.orange : Colors.green
-                              )
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-
-                      // Payment Mode
-                      DropdownButtonFormField<PaymentMode>(
-                        value: selectedMode,
-                        items: PaymentMode.values.map((e) => DropdownMenuItem(value: e, child: Text(e.name.toUpperCase()))).toList(),
-                        onChanged: (val) => setDialogState(() => selectedMode = val!),
-                        decoration: const InputDecoration(labelText: 'Payment Mode', border: OutlineInputBorder()),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                  onPressed: () async {
-                    final amount = double.tryParse(amountController.text) ?? 0;
-                    if (amount <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid amount')));
-                      return;
-                    }
-                    if (selectedCategory == FeeCategory.monthly && selectedMonth == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a month')));
-                      return;
-                    }
-                    if (selectedCategory == FeeCategory.exam && selectedExamId == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an exam')));
-                      return;
-                    }
-
-                    String remarks = isFullPayment ? 'Full Payment' : 'Partial Payment';
-                    if (selectedCategory == FeeCategory.monthly) remarks += ' - Fee for $selectedMonth';
-                    if (selectedCategory == FeeCategory.exam) {
-                      final exam = exams.firstWhere((e) => e['_id'].toString() == selectedExamId);
-                      remarks += ' - Exam: ${exam['name']}';
-                    }
-
-                    final payment = FeePayment(
-                      studentId: widget.student.id!,
-                      academicSessionId: currentSession!.id!,
-                      amount: amount,
-                      date: DateTime.now(),
-                      mode: selectedMode,
-                      category: selectedCategory,
-                      remarks: remarks,
-                    );
-
-                    final success = await feeRepo.recordPayment(payment);
-                    if (success && context.mounted) {
-                      Navigator.pop(context);
-                      _fetchFeeHistory();
-
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Success'),
-                          content: Text('₹$amount received for ${widget.student.name}.'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-                            ElevatedButton(
-                              onPressed: () async {
-                                Navigator.pop(ctx);
-                                await PdfGenerator.downloadFeeReceipt(
-                                  student: widget.student,
-                                  payment: payment,
-                                  sessionName: currentSession!.sessionName,
-                                );
-                              },
-                              child: const Text('Download Receipt'),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Confirm Payment'),
-                )
-              ],
-            );
-          },
-        ),
-      );
-    }
-  }
-
-  Widget _buildDialogInfoRow(String label, String value, {bool isBold = false, Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-          Text(value, style: TextStyle(
-            fontSize: 13,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-            color: valueColor ?? AppColors.textPrimary,
-          )),
-        ],
-      ),
     );
   }
 
@@ -715,39 +354,6 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
             },
             tooltip: 'Download Receipt',
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAttendanceStat(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-            Text(label, style: TextStyle(fontSize: 12, color: color.withOpacity(0.8))),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAbsenceItem(String date, String reason) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, size: 16, color: Colors.red),
-          const SizedBox(width: 8),
-          Text(date, style: const TextStyle(fontWeight: FontWeight.w500)),
-          const Spacer(),
-          Text(reason, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
         ],
       ),
     );
@@ -866,88 +472,6 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
         isDense: true,
         contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         border: OutlineInputBorder(),
-      ),
-    );
-  }
-
-  Widget _buildAttendanceTab() {
-    if (_isLoadingAttendance) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final stats = _attendanceData?['stats'];
-    final records = _attendanceData?['records'] as List? ?? [];
-
-    final presentCount = stats?['Present'] ?? 0;
-    final absentCount = stats?['Absent'] ?? 0;
-    final lateCount = stats?['Late'] ?? 0;
-    final total = stats?['total'] ?? 0;
-
-    final attendancePercentage = total > 0 ? ((presentCount / total) * 100).toStringAsFixed(1) : '0';
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Column(
-            children: [
-              _buildSectionCard(
-                'Attendance Overview (Last 30 Days)',
-                [
-                  Row(
-                    children: [
-                      _buildAttendanceStat('Present', '$attendancePercentage%', Colors.green),
-                      const SizedBox(width: 16),
-                      _buildAttendanceStat('Absent', '$absentCount', Colors.red),
-                      const SizedBox(width: 16),
-                      _buildAttendanceStat('Late', '$lateCount', Colors.orange),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const Text('Recent Records', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  if (records.isEmpty)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: Text('No attendance records found for this period', style: TextStyle(color: AppColors.textSecondary)),
-                      ),
-                    )
-                  else
-                    ...records.reversed.take(10).map((record) {
-                      final date = DateTime.parse(record['date']);
-                      final status = record['status'];
-                      final color = status == 'Present' ? Colors.green : (status == 'Absent' ? Colors.red : Colors.orange);
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Row(
-                          children: [
-                            Icon(Icons.calendar_today_outlined, size: 16, color: color),
-                            const SizedBox(width: 8),
-                            Text(DateFormat('dd MMM yyyy').format(date), style: const TextStyle(fontWeight: FontWeight.w500)),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: color.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                status,
-                                style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

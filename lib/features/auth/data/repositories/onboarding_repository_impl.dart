@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:collection/collection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/models/principal.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
@@ -320,9 +321,8 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
               final className = entry.key;
               final components = entry.value as Map<String, dynamic>;
 
-              final serverClass = serverClasses.firstWhere(
+              final serverClass = serverClasses.firstWhereOrNull(
                 (c) => (c['name'] == className),
-                orElse: () => null,
               );
 
               if (serverClass != null) {

@@ -10,6 +10,7 @@ const parseDate = (dateStr) => {
 
 const saveTeachers = async (req, res) => {
   const { teachers } = req.body;
+  console.log('DEBUG: Received teachers to save:', teachers);
 
   try {
     const validatedTeachers = teachers.map(teacher => {
@@ -25,10 +26,6 @@ const saveTeachers = async (req, res) => {
           ageAtJoining--;
         }
 
-        if (ageAtJoining < 18) { // Changed from 20 to 18 as per common standards
-           // Just a warning or throw error?
-        }
-
         let years = today.getFullYear() - doj.getFullYear();
         let months = today.getMonth() - doj.getMonth();
         if (months < 0 || (months === 0 && today.getDate() < doj.getDate())) {
@@ -42,8 +39,10 @@ const saveTeachers = async (req, res) => {
     });
 
     const createdTeachers = await Teacher.insertMany(validatedTeachers);
+    console.log('DEBUG: Successfully created teachers');
     res.status(201).json(createdTeachers);
   } catch (error) {
+    console.error('DEBUG: Error saving teachers:', error.message);
     res.status(400).json({ message: error.message });
   }
 };

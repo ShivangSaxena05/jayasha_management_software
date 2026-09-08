@@ -9,6 +9,10 @@ import 'package:jayasha_childrens_academy/features/staff/domain/repositories/sta
 
 class StaffRepositoryImpl implements StaffRepository {
   static const String _tokenKey = 'auth_token';
+  List<Teacher> _teachers = [];
+
+  @override
+  List<Teacher> get teachers => _teachers;
 
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -30,7 +34,8 @@ class StaffRepositoryImpl implements StaffRepository {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Teacher.fromJson(json)).toList();
+        _teachers = data.map((json) => Teacher.fromJson(json)).toList();
+        return _teachers;
       } else {
         print('Failed to load teachers. Status: ${response.statusCode}');
         return [];

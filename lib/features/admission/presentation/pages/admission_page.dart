@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:collection/collection.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/features/students/domain/repositories/student_repository.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
@@ -95,14 +96,13 @@ class _AdmissionPageState extends State<AdmissionPage> {
       final structures = await feeRepo.getFeeStructures();
 
       final classStructure = structures.firstWhere(
-        (s) => s['class'] != null && s['class']['_id'] == _selectedClassId,
-        orElse: () => null,
+        (s) => s['class'] != null && (s['class']['_id'] == _selectedClassId || s['class'] == _selectedClassId),
+        orElse: () => <String, dynamic>{},
       );
 
-      if (classStructure != null && classStructure['components'] != null) {
-        final admissionComponent = (classStructure['components'] as List).firstWhere(
+      if (classStructure.isNotEmpty && classStructure['components'] != null) {
+        final admissionComponent = (classStructure['components'] as List).firstWhereOrNull(
           (c) => c['name'].toString().toLowerCase().contains('admission'),
-          orElse: () => null,
         );
 
         setState(() {

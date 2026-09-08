@@ -15,14 +15,33 @@ const examSchema = new mongoose.Schema({
   endDate: Date,
   type: {
     type: String,
-    enum: ['Periodic Test', 'Half Yearly', 'Annual', 'Monthly Test'],
+    enum: ['Monthly Test', 'Mid Term', 'Half Yearly', 'Annual', 'Periodic Test', 'Final'],
     default: 'Monthly Test'
   },
   status: {
     type: String,
     enum: ['Scheduled', 'Ongoing', 'Completed', 'Result Declared'],
     default: 'Scheduled'
-  }
+  },
+  classes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Class'
+  }],
+  datesheet: [{
+    classId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Class'
+    },
+    className: String,
+    subject: String,
+    date: Date,
+    startTime: String,
+    durationHours: Number,
+    maxMarks: {
+      type: Number,
+      default: 100
+    }
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Exam', examSchema);

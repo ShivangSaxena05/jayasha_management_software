@@ -15,6 +15,10 @@ const feeComponentSchema = mongoose.Schema({
     enum: ['monthly', 'annually', 'one-time', 'term-wise'],
     default: 'monthly',
   },
+  applicableMonths: {
+    type: [String],
+    default: ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'],
+  },
 });
 
 const feeStructureSchema = mongoose.Schema(

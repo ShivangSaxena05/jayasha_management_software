@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/repositories/class_repository.dart';
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/models/school_class.dart';
+import 'package:collection/collection.dart';
+import 'package:jayasha_childrens_academy/features/staff/domain/repositories/staff_repository.dart';
+import 'package:jayasha_childrens_academy/core/models/teacher.dart';
+import 'package:jayasha_childrens_academy/features/fees/data/models/fee_structure.dart';
 
 import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
+import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -17,9 +23,12 @@ class ClassesPage extends StatefulWidget {
 }
 
 class _ClassesPageState extends State<ClassesPage> {
-  String? _selectedClassName;
+  String? _selectedClassId;
   bool _isInit = true;
   String? _errorMessage;
+  List<Teacher> _teachers = [];
+
+  static const List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   @override
   void didChangeDependencies() {
@@ -37,13 +46,18 @@ class _ClassesPageState extends State<ClassesPage> {
     try {
       final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
       final classRepo = Provider.of<ClassRepository>(context, listen: false);
+      final staffRepo = Provider.of<StaffRepository>(context, listen: false);
 
       final session = await dashboardRepo.getCurrentSession();
       if (session != null && session.id != null) {
         await classRepo.fetchClasses(session.id!);
-        if (classRepo.classes.isNotEmpty && mounted) {
+        final teachers = await staffRepo.getTeachers();
+        if (mounted) {
           setState(() {
-            _selectedClassName = classRepo.classes.first.name;
+            _teachers = teachers;
+            if (classRepo.classes.isNotEmpty && _selectedClassId == null) {
+              _selectedClassId = classRepo.classes.first.id;
+            }
           });
         }
       }
@@ -76,13 +90,15 @@ class _ClassesPageState extends State<ClassesPage> {
     }
 
     final classRepo = Provider.of<ClassRepository>(context);
-    final classes = classRepo.classNames;
+    final classes = classRepo.classes;
 
-    if (_selectedClassName == null && classes.isNotEmpty) {
-      _selectedClassName = classes.first;
+    if (_selectedClassId == null && classes.isNotEmpty) {
+      _selectedClassId = classes.first.id;
     }
 
-    final currentClass = classRepo.getClass(_selectedClassName ?? '');
+    final currentClass = classes.firstWhereOrNull(
+      (c) => c.id == _selectedClassId,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -121,12 +137,12 @@ class _ClassesPageState extends State<ClassesPage> {
                     : ListView.builder(
                     itemCount: classes.length,
                     itemBuilder: (context, index) {
-                      final className = classes[index];
-                      final isSelected = _selectedClassName == className;
+                      final cls = classes[index];
+                      final isSelected = _selectedClassId == cls.id;
                       return Material(
                         color: Colors.transparent,
                         child: ListTile(
-                          onTap: () => setState(() => _selectedClassName = className),
+                          onTap: () => setState(() => _selectedClassId = cls.id),
                           selected: isSelected,
                           selectedTileColor: AppColors.primary.withOpacity(0.1),
                           selectedColor: AppColors.primary,
@@ -135,7 +151,7 @@ class _ClassesPageState extends State<ClassesPage> {
                             color: isSelected ? AppColors.primary : Colors.grey,
                           ),
                           title: Text(
-                            className,
+                            cls.name,
                             style: TextStyle(
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                               color: isSelected ? AppColors.primary : AppColors.textPrimary,
@@ -191,6 +207,7 @@ class _ClassesPageState extends State<ClassesPage> {
                               color: AppColors.textPrimary,
                             ),
                           ),
+                          Text('Sections: ${currentClass.sections.isEmpty ? "None" : currentClass.sections.join(', ')}'),
                           const Text('Manage timetable, teachers, and fee structure'),
                         ],
                       ),
@@ -200,12 +217,12 @@ class _ClassesPageState extends State<ClassesPage> {
 
                   // Management Cards
                   GridView.count(
-                    crossAxisCount: 2,
+                    crossAxisCount: 3,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 24,
                     crossAxisSpacing: 24,
-                    childAspectRatio: 1.8,
+                    childAspectRatio: 1.5,
                     children: [
                       _buildManagementCard(
                         'Class Teacher',
@@ -215,9 +232,18 @@ class _ClassesPageState extends State<ClassesPage> {
                         () => _showTeachersDialog(currentClass),
                       ),
                       _buildManagementCard(
+                        'Subjects',
+                        Icons.book_rounded,
+                        currentClass.subjects.isEmpty
+                          ? 'No subjects added'
+                          : currentClass.subjects.join(', '),
+                        Colors.orange,
+                        () => _showSubjectsDialog(currentClass),
+                      ),
+                      _buildManagementCard(
                         'Fee Structure',
                         Icons.payments_rounded,
-                        currentClass.feeStructure.entries.map((e) => '${e.key}: ₹${e.value.toInt()}').join('\n'),
+                        currentClass.feeStructure.map((e) => '${e.name}: ₹${e.amount.toInt()}').join('\n'),
                         Colors.green,
                         () => _showFeeStructureDialog(currentClass),
                       ),
@@ -245,7 +271,32 @@ class _ClassesPageState extends State<ClassesPage> {
                                 'Weekly Timetable (Subject + Teacher)',
                                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                               ),
-                              const Text('Click cell to edit', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.download_rounded, size: 20, color: AppColors.primary),
+                                    onPressed: () async {
+                                      final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
+                                      final session = await dashboardRepo.getCurrentSession();
+                                      if (mounted) {
+                                        PdfGenerator.generateClassTimetable(
+                                          schoolClass: currentClass,
+                                          sessionName: session?.sessionName,
+                                        );
+                                      }
+                                    },
+                                    tooltip: 'Download Timetable',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.settings_outlined, size: 20),
+                                    onPressed: () => _showTimetableSettingsDialog(currentClass),
+                                    tooltip: 'Timetable Settings',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text('Click cell to edit', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -259,15 +310,17 @@ class _ClassesPageState extends State<ClassesPage> {
                               defaultColumnWidth: const FixedColumnWidth(120),
                               children: [
                                 // Header
-                                const TableRow(
+                                TableRow(
                                   children: [
-                                    TableCell(child: Center(child: Padding(padding: EdgeInsets.all(8), child: Text('Period', style: TextStyle(fontWeight: FontWeight.bold))))),
-                                    TableCell(child: Center(child: Padding(padding: EdgeInsets.all(8), child: Text('Mon', style: TextStyle(fontWeight: FontWeight.bold))))),
-                                    TableCell(child: Center(child: Padding(padding: EdgeInsets.all(8), child: Text('Tue', style: TextStyle(fontWeight: FontWeight.bold))))),
-                                    TableCell(child: Center(child: Padding(padding: EdgeInsets.all(8), child: Text('Wed', style: TextStyle(fontWeight: FontWeight.bold))))),
-                                    TableCell(child: Center(child: Padding(padding: EdgeInsets.all(8), child: Text('Thu', style: TextStyle(fontWeight: FontWeight.bold))))),
-                                    TableCell(child: Center(child: Padding(padding: EdgeInsets.all(8), child: Text('Fri', style: TextStyle(fontWeight: FontWeight.bold))))),
-                                    TableCell(child: Center(child: Padding(padding: EdgeInsets.all(8), child: Text('Sat', style: TextStyle(fontWeight: FontWeight.bold))))),
+                                    const TableCell(child: Center(child: Padding(padding: EdgeInsets.all(8), child: Text('Period', style: TextStyle(fontWeight: FontWeight.bold))))),
+                                    ..._days.map((day) => TableCell(
+                                      child: Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Text(day, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        ),
+                                      ),
+                                    )),
                                   ],
                                 ),
                                 // Rows
@@ -324,7 +377,7 @@ class _ClassesPageState extends State<ClassesPage> {
 
   Widget _buildManagementCard(String title, IconData icon, String subtitle, Color color, VoidCallback onTap) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -336,203 +389,594 @@ class _ClassesPageState extends State<ClassesPage> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color),
+                child: Icon(icon, color: color, size: 20),
               ),
               const Spacer(),
-              IconButton(onPressed: onTap, icon: const Icon(Icons.edit_outlined, size: 20)),
+              IconButton(
+                onPressed: onTap,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                constraints: const BoxConstraints(),
+                padding: EdgeInsets.zero,
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: Colors.grey.shade600, height: 1.4, fontSize: 13)),
+          Expanded(
+            child: Text(
+              subtitle,
+              style: TextStyle(color: Colors.grey.shade600, height: 1.2, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  void _showTimetableSettingsDialog(SchoolClass currentClass) {
+    final periodController = TextEditingController(text: currentClass.timetable.length.toString());
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Timetable Settings - ${currentClass.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Adjusting the number of periods will reset the timetable if reduced, or add empty slots if increased.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: periodController,
+                decoration: const InputDecoration(labelText: 'Number of Periods Per Day'),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isSaving ? null : () async {
+                final newCount = int.tryParse(periodController.text);
+                if (newCount == null || newCount < 1 || newCount > 12) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid number of periods (1-12)')));
+                  return;
+                }
+
+                setDialogState(() => isSaving = true);
+                try {
+                  final success = await Provider.of<ClassRepository>(context, listen: false).updateNumberOfPeriods(currentClass.id!, newCount);
+                  if (success && mounted) {
+                    Navigator.pop(context);
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update periods')));
+                  }
+                } catch (e) {
+                  debugPrint('Error updating periods: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${_getHumanReadableError(e)}')));
+                  }
+                } finally {
+                  if (mounted) setDialogState(() => isSaving = false);
+                }
+              },
+              child: isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    ).then((_) => periodController.dispose());
   }
 
   void _showAddClassDialog() {
     final nameController = TextEditingController();
     final sectionsController = TextEditingController(text: 'A');
+    bool isSaving = false;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add New Class'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Class Name',
-                hintText: 'e.g. Class 9 or Nursery',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add New Class'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Class Name',
+                  hintText: 'e.g. Class 9 or Nursery',
+                ),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: sectionsController,
+                decoration: const InputDecoration(
+                  labelText: 'Sections (comma separated)',
+                  hintText: 'e.g. A, B, C',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: sectionsController,
-              decoration: const InputDecoration(
-                labelText: 'Sections (comma separated)',
-                hintText: 'e.g. A, B, C',
-              ),
+            ElevatedButton(
+              onPressed: isSaving ? null : () async {
+                if (nameController.text.isEmpty) return;
+
+                final classRepo = Provider.of<ClassRepository>(context, listen: false);
+                if (classRepo.classes.any((c) => c.name.toLowerCase() == nameController.text.toLowerCase())) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('A class with this name already exists')),
+                  );
+                  return;
+                }
+
+                setDialogState(() => isSaving = true);
+                try {
+                  final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
+                  final session = await dashboardRepo.getCurrentSession();
+
+                  if (session?.id != null) {
+                    final sections = sectionsController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+                    final success = await classRepo.addClass(session!.id!, nameController.text, sections);
+                    if (success && mounted) {
+                      final newClass = classRepo.classes.lastWhere((c) => c.name == nameController.text);
+                      Navigator.pop(context);
+                      setState(() => _selectedClassId = newClass.id);
+                    } else if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to add class. Please try again.')),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  debugPrint('Error adding class: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${_getHumanReadableError(e)}')),
+                    );
+                  }
+                } finally {
+                  if (mounted) setDialogState(() => isSaving = false);
+                }
+              },
+              child: isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Add Class'),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.isEmpty) return;
-
-              try {
-                final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
-                final classRepo = Provider.of<ClassRepository>(context, listen: false);
-                final session = await dashboardRepo.getCurrentSession();
-
-                if (session?.id != null) {
-                  final sections = sectionsController.text.split(',').map((e) => e.trim()).toList();
-                  final success = await classRepo.addClass(session!.id!, nameController.text, sections);
-                  if (success && mounted) {
-                    Navigator.pop(context);
-                    setState(() => _selectedClassName = nameController.text);
-                  }
-                }
-              } catch (e) {
-                debugPrint('Error adding class: $e');
-              }
-            },
-            child: const Text('Add Class'),
-          ),
-        ],
       ),
-    );
+    ).then((_) {
+      nameController.dispose();
+      sectionsController.dispose();
+    });
   }
 
   void _showTeachersDialog(SchoolClass currentClass) {
     final mainTeacherController = TextEditingController(text: currentClass.classTeacher);
     final assistantTeacherController = TextEditingController(text: currentClass.assistantTeacher ?? '');
+    bool isSaving = false;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Assign Teachers - ${currentClass.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: mainTeacherController, decoration: const InputDecoration(labelText: 'Class Teacher')),
-            const SizedBox(height: 16),
-            TextField(controller: assistantTeacherController, decoration: const InputDecoration(labelText: 'Assistant Teacher')),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Assign Teachers - ${currentClass.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: mainTeacherController, decoration: const InputDecoration(labelText: 'Class Teacher')),
+              const SizedBox(height: 16),
+              TextField(controller: assistantTeacherController, decoration: const InputDecoration(labelText: 'Assistant Teacher')),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isSaving ? null : () async {
+                setDialogState(() => isSaving = true);
+                try {
+                  final success = await Provider.of<ClassRepository>(context, listen: false).updateClass(
+                    currentClass.copyWith(
+                      classTeacher: mainTeacherController.text,
+                      assistantTeacher: assistantTeacherController.text,
+                    ),
+                  );
+                  if (success && mounted) {
+                    Navigator.pop(context);
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to update teachers')),
+                    );
+                  }
+                } catch (e) {
+                  debugPrint('Error updating teachers: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${_getHumanReadableError(e)}')),
+                    );
+                  }
+                } finally {
+                  if (mounted) setDialogState(() => isSaving = false);
+                }
+              },
+              child: isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Save'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await Provider.of<ClassRepository>(context, listen: false).updateClass(
-                  currentClass.copyWith(
-                    classTeacher: mainTeacherController.text,
-                    assistantTeacher: assistantTeacherController.text,
-                  ),
-                );
-                if (mounted) Navigator.pop(context);
-              } catch (e) {
-                debugPrint('Error updating teachers: $e');
-              }
-            },
-            child: const Text('Save')
-          ),
-        ],
       ),
-    );
+    ).then((_) {
+      mainTeacherController.dispose();
+      assistantTeacherController.dispose();
+    });
   }
 
   void _showFeeStructureDialog(SchoolClass currentClass) {
     final Map<String, TextEditingController> controllers = {};
-    currentClass.feeStructure.forEach((key, value) {
-      controllers[key] = TextEditingController(text: value.toInt().toString());
-    });
+    for (var component in currentClass.feeStructure) {
+      controllers[component.name] = TextEditingController(text: component.amount.toInt().toString());
+    }
+    bool isSaving = false;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Fee Structure - ${currentClass.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: controllers.entries.map((e) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: TextField(
-              controller: e.value,
-              decoration: InputDecoration(labelText: e.key, prefixText: '₹ '),
-              keyboardType: TextInputType.number,
-            ),
-          )).toList(),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              try {
-                final Map<String, double> newFees = {};
-                controllers.forEach((key, controller) {
-                  newFees[key] = double.tryParse(controller.text) ?? 0.0;
-                });
-                Provider.of<ClassRepository>(context, listen: false).updateFeeStructure(currentClass.name, newFees);
-                Navigator.pop(context);
-              } catch (e) {
-                debugPrint('Error updating fee structure: $e');
-              }
-            },
-            child: const Text('Update')
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Fee Structure - ${currentClass.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: controllers.entries.map((e) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                controller: e.value,
+                decoration: InputDecoration(labelText: e.key, prefixText: '₹ '),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+            )).toList(),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isSaving ? null : () async {
+                setDialogState(() => isSaving = true);
+                try {
+                  final List<FeeComponent> newFees = currentClass.feeStructure.map((component) {
+                    final newAmount = double.tryParse(controllers[component.name]?.text ?? '0') ?? 0.0;
+                    return component.copyWith(amount: newAmount);
+                  }).toList();
+                  final success = await Provider.of<ClassRepository>(context, listen: false).updateFeeStructure(currentClass.id!, newFees);
+                  if (success && mounted) {
+                    Navigator.pop(context);
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to update fee structure')),
+                    );
+                  }
+                } catch (e) {
+                  debugPrint('Error updating fee structure: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${_getHumanReadableError(e)}')),
+                    );
+                  }
+                } finally {
+                  if (mounted) setDialogState(() => isSaving = false);
+                }
+              },
+              child: isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Update'),
+            ),
+          ],
+        ),
+      ),
+    ).then((_) {
+      controllers.forEach((_, c) => c.dispose());
+    });
+  }
+
+  bool _isTeacherBusy(List<SchoolClass> allClasses, String teacherName, int pIdx, int dIdx, String? excludeClassId) {
+    for (final cls in allClasses) {
+      if (cls.id == excludeClassId) continue;
+      if (pIdx >= cls.timetable.length) continue;
+      final entry = cls.timetable[pIdx][dIdx];
+      if (entry?.teacherName == teacherName) return true;
+    }
+    return false;
+  }
+
+  void _showEditTimetableDialog(SchoolClass currentClass, int pIdx, int dIdx, TimetableEntry? entry) {
+    String? selectedSubject = entry?.subject;
+    String? selectedTeacher = entry?.teacherName;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          // Filter teachers based on selected subject
+          List<Teacher> subjectTeachers = [];
+          if (selectedSubject != null) {
+            subjectTeachers = _teachers.where((t) => t.subjects.contains(selectedSubject)).toList();
+          }
+
+          final List<Teacher> otherTeachers = _teachers.where((t) => !subjectTeachers.contains(t)).toList();
+
+          return AlertDialog(
+            title: Text('Edit Period ${pIdx + 1} - Day ${_days[dIdx]}'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Select Subject', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: (selectedSubject != null && (currentClass.subjects.contains(selectedSubject) || selectedSubject == 'LUNCH'))
+                      ? selectedSubject : null,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    items: [
+                      const DropdownMenuItem(value: 'LUNCH', child: Text('LUNCH')),
+                      ...currentClass.subjects.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+                      const DropdownMenuItem(value: 'ADD_NEW', child: Text('+ Add New Subject', style: TextStyle(color: AppColors.primary))),
+                    ],
+                    onChanged: isSaving ? null : (val) async {
+                      if (val == 'ADD_NEW') {
+                        final newSub = await _showAddNewSubjectDialog();
+                        if (newSub != null && newSub.isNotEmpty) {
+                          final success = await Provider.of<ClassRepository>(context, listen: false).addSubjectToClass(currentClass.id!, newSub);
+                          if (success) {
+                            setDialogState(() {
+                              selectedSubject = newSub;
+                              selectedTeacher = null; // Reset teacher when subject changes
+                            });
+                          }
+                        }
+                      } else {
+                        setDialogState(() {
+                          selectedSubject = val;
+                          selectedTeacher = null; // Reset teacher when subject changes
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('Select Teacher', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: (selectedTeacher != null && _teachers.any((t) => t.name == selectedTeacher)) ? selectedTeacher : null,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      hintText: 'Select Teacher',
+                    ),
+                    items: [
+                      if (subjectTeachers.isNotEmpty) ...[
+                        const DropdownMenuItem(enabled: false, child: Text('Subject Teachers', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
+                        ...subjectTeachers.map((t) => DropdownMenuItem(value: t.name, child: Text(t.name))),
+                      ],
+                      if (otherTeachers.isNotEmpty) ...[
+                        const DropdownMenuItem(enabled: false, child: Text('Other Teachers', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
+                        ...otherTeachers.map((t) => DropdownMenuItem(value: t.name, child: Text(t.name))),
+                      ],
+                    ],
+                    onChanged: isSaving ? null : (val) => setDialogState(() => selectedTeacher = val),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isSaving ? null : () async {
+                  if (selectedSubject == null) return;
+
+                  final classRepo = Provider.of<ClassRepository>(context, listen: false);
+                  if (selectedTeacher != null && selectedTeacher != 'N/A') {
+                    if (_isTeacherBusy(classRepo.classes, selectedTeacher!, pIdx, dIdx, currentClass.id)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$selectedTeacher is already assigned to another class in this period')),
+                      );
+                      return;
+                    }
+                  }
+
+                  setDialogState(() => isSaving = true);
+                  try {
+                    final newEntry = TimetableEntry(
+                      subject: selectedSubject!,
+                      teacherName: selectedTeacher ?? 'N/A',
+                    );
+                    final success = await classRepo.updateTimetableEntry(
+                      currentClass.id!, pIdx, dIdx, newEntry
+                    );
+                    if (success && mounted) {
+                      Navigator.pop(context);
+                    } else if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to update timetable')),
+                      );
+                    }
+                  } catch (e) {
+                    debugPrint('Error updating timetable: $e');
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: ${_getHumanReadableError(e)}')),
+                      );
+                    }
+                  } finally {
+                    if (mounted) setDialogState(() => isSaving = false);
+                  }
+                },
+                child: isSaving
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Save'),
+              ),
+            ],
+          );
+        }
       ),
     );
   }
 
-  void _showEditTimetableDialog(SchoolClass currentClass, int pIdx, int dIdx, TimetableEntry? entry) {
-    final subjectController = TextEditingController(text: entry?.subject ?? '');
-    final teacherController = TextEditingController(text: entry?.teacherName ?? '');
-
-    showDialog(
+  Future<String?> _showAddNewSubjectDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Edit Period ${pIdx + 1} - Day ${dIdx + 1}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: subjectController, decoration: const InputDecoration(labelText: 'Subject')),
-            const SizedBox(height: 16),
-            TextField(controller: teacherController, decoration: const InputDecoration(labelText: 'Teacher')),
-          ],
+        title: const Text('Add New Subject'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Subject Name'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              try {
-                final newEntry = TimetableEntry(
-                  subject: subjectController.text,
-                  teacherName: teacherController.text,
-                );
-                Provider.of<ClassRepository>(context, listen: false).updateTimetableEntry(
-                  currentClass.name, pIdx, dIdx, newEntry
-                );
-                Navigator.pop(context);
-              } catch (e) {
-                debugPrint('Error updating timetable: $e');
-              }
-            },
-            child: const Text('Save')
-          ),
+          ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Add')),
         ],
       ),
     );
+    controller.dispose();
+    return result;
+  }
+
+  void _showSubjectsDialog(SchoolClass currentClass) {
+    final controller = TextEditingController();
+    List<String> tempSubjects = List.from(currentClass.subjects);
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Manage Subjects - ${currentClass.name}'),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        enabled: !isSaving,
+                        decoration: const InputDecoration(hintText: 'Add new subject...'),
+                        onSubmitted: (val) {
+                          if (val.isNotEmpty && !tempSubjects.contains(val)) {
+                            setDialogState(() {
+                              tempSubjects.add(val);
+                              controller.clear();
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add, color: AppColors.primary),
+                      onPressed: isSaving ? null : () {
+                        if (controller.text.isNotEmpty && !tempSubjects.contains(controller.text)) {
+                          setDialogState(() {
+                            tempSubjects.add(controller.text);
+                            controller.clear();
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: tempSubjects.map((s) => Chip(
+                    label: Text(s),
+                    onDeleted: isSaving ? null : () => setDialogState(() => tempSubjects.remove(s)),
+                  )).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isSaving ? null : () async {
+                setDialogState(() => isSaving = true);
+                try {
+                  final success = await Provider.of<ClassRepository>(context, listen: false).updateClassSubjects(
+                    currentClass.id!, tempSubjects
+                  );
+                  if (success && mounted) {
+                    Navigator.pop(context);
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to update subjects')),
+                    );
+                  }
+                } catch (e) {
+                  debugPrint('Error updating subjects: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${_getHumanReadableError(e)}')),
+                    );
+                  }
+                } finally {
+                  if (mounted) setDialogState(() => isSaving = false);
+                }
+              },
+              child: isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    ).then((_) {
+      controller.dispose();
+    });
   }
 }

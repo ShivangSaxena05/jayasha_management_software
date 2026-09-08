@@ -15,7 +15,6 @@ import 'package:jayasha_childrens_academy/features/certificates/presentation/pag
 import 'package:jayasha_childrens_academy/features/fees/data/repositories/fee_repository.dart';
 import 'package:jayasha_childrens_academy/features/students/domain/repositories/student_repository.dart';
 import 'package:jayasha_childrens_academy/features/students/presentation/pages/student_detail_page.dart';
-import 'package:jayasha_childrens_academy/features/attendance/presentation/pages/attendance_page.dart';
 import 'package:jayasha_childrens_academy/features/exams/presentation/pages/exams_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -43,7 +42,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<String> _selectedClasses = [];
   final List<String> _allClasses = ['Nursery', 'LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8'];
 
-  final List<String> _titles = ['Dashboard', 'Admission', 'Students', 'Attendance', 'Examination', 'Fee', 'Staff', 'Classes', 'Certificates'];
+  final List<String> _titles = ['Dashboard', 'Admission', 'Students', 'Examination', 'Fee', 'Staff', 'Classes', 'Certificates'];
 
   @override
   void initState() {
@@ -196,16 +195,14 @@ class _DashboardPageState extends State<DashboardPage> {
           },
         );
       case 3:
-        return const AttendancePage();
-      case 4:
         return const ExamsPage();
-      case 5:
+      case 4:
         return const FeesPage();
-      case 6:
+      case 5:
         return const StaffPage();
-      case 7:
+      case 6:
         return const ClassesPage();
-      case 8:
+      case 7:
         return const CertificatesPage();
       default:
         return _buildUnderDevelopment();
@@ -265,7 +262,6 @@ class _DashboardPageState extends State<DashboardPage> {
     final pendingFeesCount = counts['pendingFeesCount'] ?? 0;
     final totalCollection = (counts['totalCollection'] ?? 0).toDouble();
     final expectedCollection = (counts['expectedCollection'] ?? 0).toDouble();
-    final attendancePercentage = counts['attendancePercentage'] ?? 0;
 
     final recentAdmissions = stats['recentStudents'] as List? ?? [];
 
@@ -650,16 +646,14 @@ class _DashboardPageState extends State<DashboardPage> {
       case 2:
         return Icons.school_rounded;
       case 3:
-        return Icons.event_available_rounded;
-      case 4:
         return Icons.assignment_rounded;
-      case 5:
+      case 4:
         return Icons.payments_rounded;
-      case 6:
+      case 5:
         return Icons.people_rounded;
-      case 7:
+      case 6:
         return Icons.class_rounded;
-      case 8:
+      case 7:
         return Icons.verified_rounded;
       default:
         return Icons.dashboard_rounded;

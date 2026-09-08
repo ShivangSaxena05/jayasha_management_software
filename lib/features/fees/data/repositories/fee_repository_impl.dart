@@ -82,7 +82,7 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
   }
 
   @override
-  Future<List<dynamic>> getFeeStructures() async {
+  Future<List<Map<String, dynamic>>> getFeeStructures() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
@@ -96,11 +96,54 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
       }
       return [];
     } catch (e) {
       debugPrint('Error in getFeeStructures: $e');
+      return [];
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getAllPayments() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(_tokenKey);
+
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/fees/payments'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) {
+          return {
+            'id': json['_id'],
+            'amount': double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
+            'date': DateTime.parse(json['paymentDate'] ?? json['createdAt']),
+            'paidMonths': List<String>.from(json['paidMonths'] ?? []),
+            'mode': PaymentMode.values.where(
+              (e) => e.name == (json['paymentMode'] ?? 'cash'),
+            ).firstOrNull ?? PaymentMode.cash,
+            'category': FeeCategory.values.where(
+              (e) => e.name == (json['category'] ?? 'monthly'),
+            ).firstOrNull ?? FeeCategory.monthly,
+            'remarks': json['remarks'],
+            'studentName': json['student'] is Map ? json['student']['name'] : 'Unknown',
+            'admissionNumber': json['student'] is Map ? json['student']['admissionNumber'] : 'N/A',
+            'studentId': json['student'] is Map ? json['student']['_id'] : json['student'],
+          };
+        }).toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error in getAllPayments: $e');
       return [];
     }
   }
@@ -151,6 +194,31 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
     } catch (e) {
       debugPrint('Error in getFeeStats: $e');
       return {};
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getPendingFees() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(_tokenKey);
+
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/fees/pending'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error in getPendingFees: $e');
+      return [];
     }
   }
 }

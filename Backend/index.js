@@ -28,7 +28,6 @@ app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/students', require('./routes/studentRoutes'));
 app.use('/api/certificates', require('./routes/certificateRoutes'));
-app.use('/api/attendance', require('./routes/attendanceRoutes'));
 app.use('/api/exams', require('./routes/examinationRoutes'));
 
 // Error handling middleware (placeholder)

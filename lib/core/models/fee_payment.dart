@@ -9,6 +9,7 @@ class FeePayment {
   final DateTime date;
   final PaymentMode mode;
   final FeeCategory category;
+  final List<String> paidMonths;
   final String? remarks;
 
   FeePayment({
@@ -19,6 +20,7 @@ class FeePayment {
     required this.date,
     required this.mode,
     required this.category,
+    this.paidMonths = const [],
     this.remarks,
   });
 
@@ -29,14 +31,13 @@ class FeePayment {
       academicSessionId: json['academicSession'] is Map ? json['academicSession']['_id'] : json['academicSession'],
       amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
       date: DateTime.parse(json['paymentDate'] ?? json['createdAt']),
-      mode: PaymentMode.values.firstWhere(
-        (e) => e.toString().split('.').last == (json['paymentMode'] ?? 'cash'),
-        orElse: () => PaymentMode.cash,
-      ),
-      category: FeeCategory.values.firstWhere(
-        (e) => e.toString().split('.').last == (json['category'] ?? 'monthly'),
-        orElse: () => FeeCategory.monthly,
-      ),
+      mode: PaymentMode.values.where(
+        (e) => e.name == (json['paymentMode'] ?? 'cash'),
+      ).firstOrNull ?? PaymentMode.cash,
+      category: FeeCategory.values.where(
+        (e) => e.name == (json['category'] ?? 'monthly'),
+      ).firstOrNull ?? FeeCategory.monthly,
+      paidMonths: List<String>.from(json['paidMonths'] ?? []),
       remarks: json['remarks'],
     );
   }
@@ -46,8 +47,9 @@ class FeePayment {
       'studentId': studentId,
       'academicSessionId': academicSessionId,
       'amount': amount,
-      'paymentMode': mode.toString().split('.').last,
-      'category': category.toString().split('.').last,
+      'paymentMode': mode.name,
+      'category': category.name,
+      'paidMonths': paidMonths,
       'remarks': remarks,
     };
   }

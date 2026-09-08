@@ -3,6 +3,7 @@ import 'package:jayasha_childrens_academy/core/models/salary_record.dart';
 import 'package:jayasha_childrens_academy/core/models/leave_record.dart';
 
 abstract class StaffRepository {
+  List<Teacher> get teachers;
   Future<List<Teacher>> getTeachers();
   Future<bool> addTeacher(Teacher teacher);
   Future<bool> updateTeacher(String id, Teacher teacher);

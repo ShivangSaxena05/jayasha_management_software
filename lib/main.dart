@@ -17,7 +17,6 @@ import 'package:jayasha_childrens_academy/features/students/data/repositories/st
 import 'package:jayasha_childrens_academy/features/staff/domain/repositories/staff_repository.dart';
 import 'package:jayasha_childrens_academy/features/staff/data/repositories/staff_repository_impl.dart';
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
-import 'package:jayasha_childrens_academy/features/attendance/data/repositories/attendance_repository.dart';
 import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_repository.dart';
 
 void main() async {
@@ -37,7 +36,6 @@ void main() async {
         Provider<StaffRepository>(create: (_) => StaffRepositoryImpl()),
         ChangeNotifierProvider<fee_domain.FeeRepository>(create: (_) => FeeRepositoryImpl()),
         Provider<CertificateRepository>(create: (_) => CertificateRepository()),
-        Provider<AttendanceRepository>(create: (_) => AttendanceRepository()),
         Provider<ExamRepository>(create: (_) => ExamRepository()),
       ],
       child: MyApp(isComplete: isComplete),

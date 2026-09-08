@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
+import 'package:jayasha_childrens_academy/features/fees/data/models/fee_structure.dart';
 import '../models/school_class.dart';
 
 class ClassRepository extends ChangeNotifier {
@@ -111,6 +112,8 @@ class ClassRepository extends ChangeNotifier {
           notifyListeners();
         }
         return true;
+      } else {
+        debugPrint('Failed to update class. Status: ${response.statusCode}, Body: ${response.body}');
       }
     } catch (e) {
       debugPrint('Error updating class: $e');
@@ -129,25 +132,82 @@ class ClassRepository extends ChangeNotifier {
   // Local helper for backward compatibility or placeholder
   SchoolClass? getClass(String name) => getClassByName(name);
 
-  void updateFeeStructure(String className, Map<String, double> newFees) {
-    final index = _classes.indexWhere((c) => c.name == className);
+  Future<bool> updateFeeStructure(String classId, List<FeeComponent> newFees) async {
+    final index = _classes.indexWhere((c) => c.id == classId);
     if (index != -1) {
-      _classes[index] = _classes[index].copyWith(feeStructure: newFees);
-      notifyListeners();
-      // In a real app, also call backend to save FeeStructure
+      final updatedClass = _classes[index].copyWith(feeStructure: newFees);
+      try {
+        final success = await updateClass(updatedClass);
+        return success;
+      } catch (e) {
+        debugPrint('Error updating fee structure: $e');
+        return false;
+      }
     }
+    return false;
   }
 
-  void updateTimetableEntry(String className, int period, int day, TimetableEntry? entry) {
-    final index = _classes.indexWhere((c) => c.name == className);
+  Future<bool> updateTimetableEntry(String classId, int period, int day, TimetableEntry? entry) async {
+    final index = _classes.indexWhere((c) => c.id == classId);
     if (index != -1) {
       final currentTimetable = List<List<TimetableEntry?>>.from(
         _classes[index].timetable.map((row) => List<TimetableEntry?>.from(row))
       );
       currentTimetable[period][day] = entry;
-      _classes[index] = _classes[index].copyWith(timetable: currentTimetable);
-      notifyListeners();
-      // In a real app, also call backend to save Timetable
+      final updatedClass = _classes[index].copyWith(timetable: currentTimetable);
+
+      try {
+        final success = await updateClass(updatedClass);
+        return success;
+      } catch (e) {
+        debugPrint('Error updating timetable: $e');
+        return false;
+      }
     }
+    return false;
+  }
+
+  Future<bool> addSubjectToClass(String classId, String subject) async {
+    final index = _classes.indexWhere((c) => c.id == classId);
+    if (index == -1) return false;
+
+    final currentClass = _classes[index];
+    if (currentClass.subjects.contains(subject)) return true;
+
+    final updatedSubjects = List<String>.from(currentClass.subjects)..add(subject);
+    final updatedClass = currentClass.copyWith(subjects: updatedSubjects);
+
+    try {
+      final success = await updateClass(updatedClass);
+      return success;
+    } catch (e) {
+      debugPrint('Error adding subject to class: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateClassSubjects(String classId, List<String> subjects) async {
+    final index = _classes.indexWhere((c) => c.id == classId);
+    if (index == -1) return false;
+
+    final updatedClass = _classes[index].copyWith(subjects: subjects);
+    return await updateClass(updatedClass);
+  }
+
+  Future<bool> updateNumberOfPeriods(String classId, int newCount) async {
+    final index = _classes.indexWhere((c) => c.id == classId);
+    if (index == -1) return false;
+
+    final currentClass = _classes[index];
+    if (currentClass.numberOfPeriods == newCount) return true;
+
+    final updatedClass = currentClass.copyWith(numberOfPeriods: newCount);
+    // When updating numberOfPeriods, the backend should handle timetable resizing
+    // to preserve existing data where possible or re-initialize.
+    // Our updateClass call sends the whole object, but if we change numberOfPeriods
+    // locally, the 'timetable' getter in SchoolClass might behave differently if not handled.
+    // However, the model uses 'numberOfPeriods' to generate/parse.
+
+    return await updateClass(updatedClass);
   }
 }

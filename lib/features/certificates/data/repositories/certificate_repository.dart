@@ -7,7 +7,7 @@ class CertificateRepository {
   Future<Map<String, dynamic>> generateCertificate({
     required String studentId,
     required String type,
-    Map<String, String>? details,
+    Map<String, dynamic>? details,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -21,6 +21,33 @@ class CertificateRepository {
         },
         body: jsonEncode({
           'studentId': studentId,
+          'type': type,
+          'details': details,
+        }),
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> updateCertificate({
+    required String certificateId,
+    required String type,
+    required Map<String, dynamic> details,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      final response = await http.put(
+        Uri.parse('${ApiConfig.certificates}/$certificateId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
           'type': type,
           'details': details,
         }),

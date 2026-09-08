@@ -24,7 +24,7 @@ class TeacherFormPage extends StatefulWidget {
 class _TeacherFormPageState extends State<TeacherFormPage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  final int _totalPages = 4;
+  final int _totalPages = 5;
   bool _isLoading = false;
   final _uploadRepo = OnboardingRepositoryImpl();
 
@@ -32,6 +32,7 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
   final _formKey2 = GlobalKey<FormState>();
   final _formKey3 = GlobalKey<FormState>();
   final _formKey4 = GlobalKey<FormState>();
+  final _formKey5 = GlobalKey<FormState>();
 
   // Page 1: Basic Info
   final _nameController = TextEditingController();
@@ -70,7 +71,7 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
 
   bool _isClassTeacher = false;
   String? _classTeacherClass;
-  String? _classTeacherSection;
+  final _classTeacherSectionController = TextEditingController();
 
   File? _imageFile;
   File? _aadhaarFrontFile;
@@ -130,7 +131,7 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
 
     _isClassTeacher = teacher.isClassTeacher;
     _classTeacherClass = teacher.classTeacherOfClass;
-    _classTeacherSection = teacher.classTeacherOfSection;
+    _classTeacherSectionController.text = teacher.classTeacherOfSection ?? '';
 
     _existingPhotoUrl = teacher.photoPath;
     _existingAadhaarFrontUrl = teacher.aadhaarFrontPath;
@@ -182,6 +183,7 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
     _emergencyNameController.dispose();
     _emergencyPhoneController.dispose();
     _emergencyRelationController.dispose();
+    _classTeacherSectionController.dispose();
     for (var controller in _classSectionsControllers.values) {
       controller.dispose();
     }
@@ -189,13 +191,21 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
   }
 
   Future<void> _selectDate(BuildContext context, TextEditingController controller, {bool isDOB = false}) async {
+    DateTime initialDate;
+    final existingDate = _parseDate(controller.text);
+    if (existingDate != null) {
+      initialDate = existingDate;
+    } else {
+      initialDate = isDOB
+          ? DateTime.now().subtract(const Duration(days: 365 * 25))
+          : DateTime.now();
+    }
+
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: isDOB
-          ? DateTime.now().subtract(const Duration(days: 365 * 25))
-          : DateTime.now(),
+      initialDate: initialDate,
       firstDate: DateTime(1950),
-      lastDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
     );
     if (picked != null) {
       setState(() {
@@ -303,103 +313,127 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(widget.teacher == null ? "Add New Teacher" : "Edit Teacher"),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 900),
-          margin: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Discard changes?'),
+            content: const Text('You have unsaved changes. Are you sure you want to discard them?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Yes', style: TextStyle(color: AppColors.error)),
+              ),
             ],
           ),
-          child: Stack(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_getStepTitle(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                          Text(
-                            "Step ${_currentPage + 1} of $_totalPages",
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  LinearProgressIndicator(
-                    value: (_currentPage + 1) / _totalPages,
-                    backgroundColor: Colors.grey.shade200,
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  const Divider(height: 40),
-                  Expanded(
-                    child: PageView(
-                      controller: _pageController,
-                      physics: const NeverScrollableScrollPhysics(),
-                      onPageChanged: (index) => setState(() => _currentPage = index),
+        );
+        if (shouldPop ?? false) {
+          if (context.mounted) Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text(widget.teacher == null ? "Add New Teacher" : "Edit Teacher"),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 900),
+            margin: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+            ),
+            child: Stack(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Form(key: _formKey1, child: _buildPersonalStep()),
-                        Form(key: _formKey2, child: _buildProfessionalStep()),
-                        Form(key: _formKey3, child: _buildTeachingStep()),
-                        Form(key: _formKey4, child: _buildSalaryEmergencyStep()),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_getStepTitle(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                            Text(
+                              "Step ${_currentPage + 1} of $_totalPages",
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      if (_currentPage > 0)
-                        OutlinedButton(
-                          onPressed: _previousPage,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 15),
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(
+                      value: (_currentPage + 1) / _totalPages,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    const Divider(height: 40),
+                    Expanded(
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onPageChanged: (index) => setState(() => _currentPage = index),
+                        children: [
+                          Form(key: _formKey1, child: _buildPersonalStep()),
+                          Form(key: _formKey2, child: _buildProfessionalStep()),
+                          Form(key: _formKey3, child: _buildTeachingStep()),
+                          Form(key: _formKey4, child: _buildSalaryEmergencyStep()),
+                          _buildScheduleViewStep(),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (_currentPage > 0)
+                          OutlinedButton(
+                            onPressed: _previousPage,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 15),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text("Back"),
+                          )
+                        else
+                          const SizedBox.shrink(),
+                        ElevatedButton(
+                          onPressed: () => _nextPage(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                          child: const Text("Back"),
-                        )
-                      else
-                        const SizedBox.shrink(),
-                      ElevatedButton(
-                        onPressed: () => _nextPage(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          child: Text(_currentPage == _totalPages - 1
+                              ? (widget.teacher == null ? "Save Teacher" : "Update Teacher")
+                              : "Next Step"),
                         ),
-                        child: Text(_currentPage == _totalPages - 1 ? (widget.teacher == null ? "Save Teacher" : "Update Teacher") : "Next Step"),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              if (_isLoading)
-                Container(
-                  color: Colors.white.withOpacity(0.5),
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
-            ],
+                if (_isLoading)
+                  Container(
+                    color: Colors.white.withOpacity(0.5),
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -412,6 +446,7 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
       case 1: return "Professional Details";
       case 2: return "Teaching Assignment";
       case 3: return "Salary & Emergency Contact";
+      case 4: return "Current Schedule (Read-only)";
       default: return "";
     }
   }
@@ -455,15 +490,40 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
           const SizedBox(height: 24),
           Row(
             children: [
-              Expanded(child: _buildTextField("Full Name", _nameController, Icons.person_outline)),
+              Expanded(
+                  child: _buildTextField(
+                "Full Name",
+                _nameController,
+                Icons.person_outline,
+              )),
               const SizedBox(width: 16),
-              Expanded(child: _buildTextField("Email Address", _emailController, Icons.email_outlined)),
+              Expanded(
+                  child: _buildTextField(
+                "Email Address",
+                _emailController,
+                Icons.email_outlined,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v)) return 'Invalid email';
+                  return null;
+                },
+              )),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildTextField("Phone Number", _phoneController, Icons.phone_outlined)),
+              Expanded(
+                  child: _buildTextField(
+                "Phone Number",
+                _phoneController,
+                Icons.phone_outlined,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  if (!RegExp(r'^\d{10}$').hasMatch(v)) return 'Invalid phone (10 digits)';
+                  return null;
+                },
+              )),
               const SizedBox(width: 16),
               Expanded(child: _buildDatePicker("Date of Birth", _dobController, isDOB: true)),
             ],
@@ -646,7 +706,7 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
                     children: [
                       Expanded(child: _buildDropdown("Class Teacher Of (Class)", _availableClasses, _classTeacherClass ?? _availableClasses.first, (v) => setState(() => _classTeacherClass = v))),
                       const SizedBox(width: 16),
-                      Expanded(child: _buildTextField("Class Teacher Of (Section)", TextEditingController(text: _classTeacherSection), Icons.label_important_outline, onChanged: (v) => _classTeacherSection = v)),
+                      Expanded(child: _buildTextField("Class Teacher Of (Section)", _classTeacherSectionController, Icons.label_important_outline)),
                     ],
                   ),
                 ],
@@ -661,43 +721,145 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
 
   Widget _buildSalaryEmergencyStep() {
     return SingleChildScrollView(
-      child: Form(
-        key: _formKey4,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Financial Information", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Financial Information", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
             const SizedBox(height: 16),
             _buildTextField("Base Salary (Monthly)", _baseSalaryController, Icons.currency_rupee, hint: "Enter monthly base salary"),
             const SizedBox(height: 24),
             const Text("Bank Details", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
-            _buildTextField("Bank Name", _bankNameController, Icons.account_balance_outlined),
+            _buildTextField("Bank Name", _bankNameController, Icons.account_balance_outlined, validator: (v) => null),
             const SizedBox(height: 16),
-            _buildTextField("Account Number", _accountNumberController, Icons.numbers),
+            _buildTextField("Account Number", _accountNumberController, Icons.numbers, validator: (v) => null),
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _buildTextField("IFSC Code", _ifscCodeController, Icons.code)),
+                Expanded(
+                    child: _buildTextField(
+                  "IFSC Code",
+                  _ifscCodeController,
+                  Icons.code,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return null;
+                    if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$').hasMatch(v)) return 'Invalid IFSC';
+                    return null;
+                  },
+                )),
                 const SizedBox(width: 16),
-                Expanded(child: _buildTextField("Branch Name", _branchNameController, Icons.location_city)),
+                Expanded(child: _buildTextField("Branch Name", _branchNameController, Icons.location_city, validator: (v) => null)),
               ],
             ),
             const SizedBox(height: 32),
             const Text("Emergency Contact", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
             const SizedBox(height: 16),
-            _buildTextField("Contact Person Name", _emergencyNameController, Icons.person_add_alt),
+            _buildTextField("Contact Person Name", _emergencyNameController, Icons.person_add_alt, validator: (v) => null),
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _buildTextField("Emergency Phone", _emergencyPhoneController, Icons.phone_android)),
+                Expanded(
+                    child: _buildTextField(
+                  "Emergency Phone",
+                  _emergencyPhoneController,
+                  Icons.phone_android,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return null;
+                    if (!RegExp(r'^\d{10}$').hasMatch(v)) return 'Invalid phone (10 digits)';
+                    return null;
+                  },
+                )),
                 const SizedBox(width: 16),
-                Expanded(child: _buildTextField("Relation", _emergencyRelationController, Icons.family_restroom)),
+                Expanded(child: _buildTextField("Relation", _emergencyRelationController, Icons.family_restroom, validator: (v) => null)),
               ],
             ),
             const SizedBox(height: 40),
           ],
         ),
+    );
+  }
+
+  Widget _buildScheduleViewStep() {
+    final schedule = widget.teacher?.schedule ?? [];
+    if (schedule.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.calendar_today_outlined, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('No classes scheduled yet', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+            Text('Schedule is managed via Classes Timetable', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    final Map<int, List<TeacherScheduleEntry>> groupedSchedule = {};
+    for (var entry in schedule) {
+      groupedSchedule.putIfAbsent(entry.day, () => []).add(entry);
+    }
+    for (var dayEntries in groupedSchedule.values) {
+      dayEntries.sort((a, b) => a.period.compareTo(b.period));
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Assigned Weekly Schedule", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
+          const SizedBox(height: 8),
+          const Text("This schedule is synchronized from the class timetables and is read-only here.", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          const SizedBox(height: 24),
+          ...days.asMap().entries.map((entry) {
+            final dayIndex = entry.key;
+            final dayName = entry.value;
+            final dayEntries = groupedSchedule[dayIndex] ?? [];
+
+            if (dayEntries.isEmpty) return const SizedBox.shrink();
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(dayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary)),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: dayEntries.map((e) => Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4)],
+                        border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Period ${e.period + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                          const SizedBox(height: 4),
+                          Text(e.className, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          Text(e.subject, style: const TextStyle(fontSize: 13, color: AppColors.primary)),
+                        ],
+                      ),
+                    )).toList(),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -731,57 +893,146 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
     String? aadhaarBackUrl = _existingAadhaarBackUrl;
 
     try {
+      final uploadTasks = <Future<String?>>[];
+
       if (_imageFile != null) {
-        photoUrl = await _uploadRepo.uploadFile(_imageFile!.path, 'teacher_photo');
+        uploadTasks.add(_uploadRepo.uploadFile(_imageFile!.path, 'teacher_photo'));
+      } else {
+        uploadTasks.add(Future.value(_existingPhotoUrl));
       }
+
       if (_aadhaarFrontFile != null) {
-        aadhaarFrontUrl = await _uploadRepo.uploadFile(_aadhaarFrontFile!.path, 'teacher_aadhaar_front');
+        uploadTasks.add(_uploadRepo.uploadFile(_aadhaarFrontFile!.path, 'teacher_aadhaar_front'));
+      } else {
+        uploadTasks.add(Future.value(_existingAadhaarFrontUrl));
       }
+
       if (_aadhaarBackFile != null) {
-        aadhaarBackUrl = await _uploadRepo.uploadFile(_aadhaarBackFile!.path, 'teacher_aadhaar_back');
+        uploadTasks.add(_uploadRepo.uploadFile(_aadhaarBackFile!.path, 'teacher_aadhaar_back'));
+      } else {
+        uploadTasks.add(Future.value(_existingAadhaarBackUrl));
       }
+
+      final urls = await Future.wait(uploadTasks);
+      photoUrl = urls[0];
+      aadhaarFrontUrl = urls[1];
+      aadhaarBackUrl = urls[2];
     } catch (e) {
       debugPrint("Error uploading teacher files: $e");
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('File upload failed. Please check your connection and try again.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    final staffRepo = Provider.of<StaffRepository>(context, listen: false);
+
+    // Conflict check for Class Teacher
+    if (_isClassTeacher) {
+      final existingTeachers = staffRepo.teachers;
+      final duplicate = existingTeachers.firstWhere(
+        (t) =>
+            t.id != widget.teacher?.id &&
+            t.isClassTeacher &&
+            t.classTeacherOfClass == _classTeacherClass &&
+            t.classTeacherOfSection?.trim().toLowerCase() == _classTeacherSectionController.text.trim().toLowerCase(),
+        orElse: () => Teacher(
+          name: '',
+          gender: '',
+          email: '',
+          phone: '',
+          subjects: [],
+          dob: '',
+          maritalStatus: '',
+          address: '',
+          dateOfJoining: '',
+          department: '',
+          qualification: '',
+          experience: '',
+          status: '',
+          classesTeaching: [],
+          sections: [],
+          isClassTeacher: false,
+        ),
+      );
+
+      if (duplicate.name.isNotEmpty) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${duplicate.name} is already the class teacher for $_classTeacherClass-${_classTeacherSectionController.text}'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    // Duplicate check for Email/Phone
+    final existingTeachers = staffRepo.teachers;
+    final isDuplicate = existingTeachers.any((t) =>
+        t.id != widget.teacher?.id &&
+        (t.email.toLowerCase() == _emailController.text.trim().toLowerCase() || t.phone == _phoneController.text.trim()));
+
+    if (isDuplicate) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error: A teacher with this email or phone number already exists.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
     }
 
     final teacher = Teacher(
       id: widget.teacher?.id,
-      name: _nameController.text,
+      name: _nameController.text.trim(),
       gender: _gender,
-      email: _emailController.text,
-      phone: _phoneController.text,
+      email: _emailController.text.trim(),
+      phone: _phoneController.text.trim(),
       subjects: finalSubjects,
       dob: _dobController.text,
       photoPath: photoUrl,
       aadhaarFrontPath: aadhaarFrontUrl,
       aadhaarBackPath: aadhaarBackUrl,
       maritalStatus: _maritalStatus,
-      address: _addressController.text,
+      address: _addressController.text.trim(),
       dateOfJoining: _dojController.text,
-      department: _departmentController.text,
-      qualification: _qualificationController.text,
-      experience: _experienceController.text,
+      department: _departmentController.text.trim(),
+      qualification: _qualificationController.text.trim(),
+      experience: _experienceController.text.trim(),
       status: _status.toLowerCase(),
       classesTeaching: _selectedClasses,
       sections: allSections,
       isClassTeacher: _isClassTeacher,
       classTeacherOfClass: _isClassTeacher ? (_classTeacherClass ?? _availableClasses.first) : null,
-      classTeacherOfSection: _isClassTeacher ? _classTeacherSection : null,
+      classTeacherOfSection: _isClassTeacher ? _classTeacherSectionController.text.trim() : null,
       baseSalary: double.tryParse(_baseSalaryController.text) ?? 0.0,
       bankDetails: BankDetails(
-        bankName: _bankNameController.text,
-        accountNumber: _accountNumberController.text,
-        ifscCode: _ifscCodeController.text,
-        branchName: _branchNameController.text,
+        bankName: _bankNameController.text.trim(),
+        accountNumber: _accountNumberController.text.trim(),
+        ifscCode: _ifscCodeController.text.trim(),
+        branchName: _branchNameController.text.trim(),
       ),
       emergencyContact: EmergencyContact(
-        name: _emergencyNameController.text,
-        phone: _emergencyPhoneController.text,
-        relation: _emergencyRelationController.text,
+        name: _emergencyNameController.text.trim(),
+        phone: _emergencyPhoneController.text.trim(),
+        relation: _emergencyRelationController.text.trim(),
       ),
+      schedule: widget.teacher?.schedule ?? [],
     );
 
-    final staffRepo = Provider.of<StaffRepository>(context, listen: false);
     bool success;
     if (widget.teacher == null) {
       success = await staffRepo.addTeacher(teacher);

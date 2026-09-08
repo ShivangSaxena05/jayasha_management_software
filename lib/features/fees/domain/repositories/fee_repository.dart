@@ -6,6 +6,8 @@ abstract class FeeRepository extends ChangeNotifier {
   Future<Map<String, dynamic>> getStudentFeeStatus(String studentId);
   Future<List<FeePayment>> getStudentPayments(String studentId);
   Future<bool> saveFeeStructure(List<Map<String, dynamic>> fees);
-  Future<List<dynamic>> getFeeStructures();
+  Future<List<Map<String, dynamic>>> getFeeStructures();
+  Future<List<Map<String, dynamic>>> getAllPayments();
+  Future<List<Map<String, dynamic>>> getPendingFees();
   Future<Map<String, dynamic>> getFeeStats();
 }

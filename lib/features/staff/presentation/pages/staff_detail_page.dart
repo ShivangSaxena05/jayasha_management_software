@@ -1,3 +1,4 @@
+import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,7 @@ import 'package:jayasha_childrens_academy/core/models/leave_record.dart';
 import 'package:jayasha_childrens_academy/features/staff/domain/repositories/staff_repository.dart';
 import 'package:jayasha_childrens_academy/features/staff/presentation/pages/teacher_form_page.dart';
 import 'package:jayasha_childrens_academy/features/auth/presentation/pages/onboarding/principal_onboarding_page.dart';
+import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
 
 class StaffDetailPage extends StatefulWidget {
   final dynamic person;
@@ -90,7 +92,11 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                     children: [
                       _buildInfoSection(),
                       const SizedBox(height: 24),
-                      if (person is Teacher) _buildHolidaySection(),
+                      if (person is Teacher) ...[
+                        _buildScheduleSection(),
+                        const SizedBox(height: 24),
+                        _buildHolidaySection(),
+                      ],
                     ],
                   ),
                 ),
@@ -371,6 +377,96 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
         children: [
           Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w600)),
           Text(value),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleSection() {
+    final teacher = _person as Teacher;
+    if (teacher.schedule.isEmpty) return const SizedBox.shrink();
+
+    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    // Group schedule by day
+    final Map<int, List<TeacherScheduleEntry>> groupedSchedule = {};
+    for (var entry in teacher.schedule) {
+      groupedSchedule.putIfAbsent(entry.day, () => []).add(entry);
+    }
+
+    // Sort entries within each day by period
+    for (var dayEntries in groupedSchedule.values) {
+      dayEntries.sort((a, b) => a.period.compareTo(b.period));
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Weekly Schedule',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              IconButton(
+                icon: const Icon(Icons.download_rounded, color: AppColors.primary),
+                onPressed: () async {
+                  final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
+                  final session = await dashboardRepo.getCurrentSession();
+                  if (mounted) {
+                    PdfGenerator.generateTeacherTimetable(
+                      teacher: teacher,
+                      sessionName: session?.sessionName,
+                    );
+                  }
+                },
+                tooltip: 'Download Schedule',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...days.asMap().entries.map((entry) {
+            final dayIndex = entry.key;
+            final dayName = entry.value;
+            final dayEntries = groupedSchedule[dayIndex] ?? [];
+
+            if (dayEntries.isEmpty) return const SizedBox.shrink();
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(dayName, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: dayEntries.map((e) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Period ${e.period + 1}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('${e.className} - ${e.subject}', style: const TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    )).toList(),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );

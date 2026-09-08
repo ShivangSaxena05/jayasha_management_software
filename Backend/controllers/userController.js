@@ -9,7 +9,6 @@ const FeePayment = require('../models/FeePayment');
 const FeeStructure = require('../models/FeeStructure');
 const Exam = require('../models/Exam');
 const Mark = require('../models/Mark');
-const Attendance = require('../models/Attendance');
 const Certificate = require('../models/Certificate');
 const LeaveRecord = require('../models/LeaveRecord');
 const SalaryRecord = require('../models/SalaryRecord');
@@ -32,7 +31,6 @@ const resetSetup = async (req, res) => {
       FeeStructure.deleteMany({}),
       Exam.deleteMany({}),
       Mark.deleteMany({}),
-      Attendance.deleteMany({}),
       Certificate.deleteMany({}),
       LeaveRecord.deleteMany({}),
       SalaryRecord.deleteMany({}),

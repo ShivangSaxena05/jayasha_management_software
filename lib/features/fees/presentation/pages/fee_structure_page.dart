@@ -5,6 +5,7 @@ import 'package:jayasha_childrens_academy/features/classes/data/repositories/cla
 import 'package:jayasha_childrens_academy/features/classes/data/models/school_class.dart';
 import 'package:jayasha_childrens_academy/features/fees/domain/repositories/fee_repository.dart';
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
+import 'package:jayasha_childrens_academy/features/fees/data/models/fee_structure.dart';
 
 class FeeStructurePage extends StatefulWidget {
   final VoidCallback onBack;
@@ -17,28 +18,24 @@ class FeeStructurePage extends StatefulWidget {
 
 class _FeeStructurePageState extends State<FeeStructurePage> {
   SchoolClass? selectedClass;
-  final Map<String, TextEditingController> _controllers = {
-    'Monthly Tuition Fee': TextEditingController(),
-    'Annual Admission Fee': TextEditingController(),
-    'Examination Fee': TextEditingController(),
-  };
+  List<FeeComponent> _components = [];
+  final List<String> _allMonths = [
+    'April', 'May', 'June', 'July', 'August', 'September',
+    'October', 'November', 'December', 'January', 'February', 'March'
+  ];
 
-  @override
-  void dispose() {
-    for (var controller in _controllers.values) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
-
-  void _updateControllers(SchoolClass? currentClass) {
+  void _initializeComponents(SchoolClass? currentClass) {
     if (currentClass == null) return;
 
-    // Default components if none exist
-    final components = currentClass.feeStructure;
-    _controllers['Monthly Tuition Fee']?.text = (components['Monthly Tuition Fee'] ?? 0.0).toString();
-    _controllers['Annual Admission Fee']?.text = (components['Annual Admission Fee'] ?? 0.0).toString();
-    _controllers['Examination Fee']?.text = (components['Examination Fee'] ?? 0.0).toString();
+    if (currentClass.feeStructure.isEmpty) {
+      _components = [
+        FeeComponent(name: 'Monthly Tuition Fee', amount: 0, frequency: 'monthly', applicableMonths: List.from(_allMonths)),
+        FeeComponent(name: 'Annual Admission Fee', amount: 0, frequency: 'annually', applicableMonths: []),
+        FeeComponent(name: 'Examination Fee', amount: 0, frequency: 'annually', applicableMonths: []),
+      ];
+    } else {
+      _components = currentClass.feeStructure.map((c) => c.copyWith()).toList();
+    }
   }
 
   @override
@@ -50,7 +47,7 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
     final classes = classRepo.classes;
     if (selectedClass == null && classes.isNotEmpty) {
       selectedClass = classes.first;
-      _updateControllers(selectedClass);
+      _initializeComponents(selectedClass);
     }
 
     return Padding(
@@ -119,7 +116,7 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
                               onTap: () {
                                 setState(() {
                                   selectedClass = c;
-                                  _updateControllers(c);
+                                  _initializeComponents(c);
                                 });
                               },
                             );
@@ -154,28 +151,20 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'Adjust the fee components for this class below. Changes will be applied to all students in this class.',
+                          'Adjust the fee components for this class below. Monthly fees can be configured for specific months.',
                           style: TextStyle(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 32),
-                        ..._controllers.entries.map((e) => Padding(
-                          padding: const EdgeInsets.only(bottom: 24),
-                          child: SizedBox(
-                            width: 400,
-                            child: TextField(
-                              controller: e.value,
-                              decoration: InputDecoration(
-                                labelText: e.key,
-                                border: const OutlineInputBorder(),
-                                prefixText: '₹ ',
-                                filled: true,
-                                fillColor: Colors.grey.shade50,
-                              ),
-                              keyboardType: TextInputType.number,
-                            ),
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: _components.length,
+                            itemBuilder: (context, index) {
+                              final component = _components[index];
+                              return _buildComponentEditor(component, index);
+                            },
                           ),
-                        )).toList(),
-                        const Spacer(),
+                        ),
+                        const SizedBox(height: 20),
                         Row(
                           children: [
                             ElevatedButton(
@@ -187,29 +176,22 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
                                   {
                                     'academicSessionId': session.id,
                                     'classId': selectedClass!.id,
-                                    'components': _controllers.entries.map((e) => {
-                                      'name': e.key,
-                                      'amount': double.tryParse(e.value.text) ?? 0.0,
-                                      'frequency': e.key.contains('Monthly') ? 'monthly' : 'annually'
-                                    }).toList(),
+                                    'components': _components.map((c) => c.toJson()).toList(),
                                   }
                                 ];
 
                                 final success = await feeRepo.saveFeeStructure(feeData);
                                 if (success) {
-                                  // Update local class structure too
-                                  final Map<String, double> localFees = {};
-                                  _controllers.forEach((key, controller) {
-                                    localFees[key] = double.tryParse(controller.text) ?? 0.0;
-                                  });
-                                  classRepo.updateFeeStructure(selectedClass!.name, localFees);
+                                  await classRepo.updateFeeStructure(selectedClass!.id!, _components);
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Fee structure for ${selectedClass!.name} updated successfully!'),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Fee structure for ${selectedClass!.name} updated successfully!'),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  }
                                 }
                               },
                               style: ElevatedButton.styleFrom(
@@ -223,8 +205,9 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
                             const SizedBox(width: 16),
                             TextButton(
                               onPressed: () {
-                                _updateControllers(selectedClass);
-                                setState(() {});
+                                setState(() {
+                                  _initializeComponents(selectedClass);
+                                });
                               },
                               child: const Text('Reset'),
                             ),
@@ -238,6 +221,81 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildComponentEditor(FeeComponent component, int index) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 24),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    component.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+                SizedBox(
+                  width: 150,
+                  child: TextField(
+                    decoration: const InputDecoration(
+                      prefixText: '₹ ',
+                      labelText: 'Amount',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      _components[index] = component.copyWith(
+                        amount: double.tryParse(value) ?? 0,
+                      );
+                    },
+                    controller: TextEditingController(text: component.amount.toString())..selection = TextSelection.fromPosition(TextPosition(offset: component.amount.toString().length)),
+                  ),
+                ),
+              ],
+            ),
+            if (component.frequency == 'monthly') ...[
+              const SizedBox(height: 20),
+              const Text('Applicable Months:', style: TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: _allMonths.map((month) {
+                  final isSelected = component.applicableMonths.contains(month);
+                  return FilterChip(
+                    label: Text(month),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        final newMonths = List<String>.from(component.applicableMonths);
+                        if (selected) {
+                          newMonths.add(month);
+                        } else {
+                          newMonths.remove(month);
+                        }
+                        _components[index] = component.copyWith(applicableMonths: newMonths);
+                      });
+                    },
+                    selectedColor: AppColors.primary.withOpacity(0.2),
+                    checkmarkColor: AppColors.primary,
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

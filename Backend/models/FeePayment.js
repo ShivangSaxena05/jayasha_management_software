@@ -30,6 +30,10 @@ const feePaymentSchema = mongoose.Schema(
       enum: ['monthly', 'admission', 'exam', 'annual', 'other'],
       default: 'monthly',
     },
+    paidMonths: {
+      type: [String], // e.g., ['April', 'May']
+      default: [],
+    },
     remarks: {
       type: String,
     },

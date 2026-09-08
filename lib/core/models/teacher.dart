@@ -70,6 +70,38 @@ class EmergencyContact {
       );
 }
 
+class TeacherScheduleEntry {
+  final String classId;
+  final String className;
+  final String subject;
+  final int period;
+  final int day;
+
+  TeacherScheduleEntry({
+    required this.classId,
+    required this.className,
+    required this.subject,
+    required this.period,
+    required this.day,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'classId': classId,
+    'className': className,
+    'subject': subject,
+    'period': period,
+    'day': day,
+  };
+
+  factory TeacherScheduleEntry.fromJson(Map<String, dynamic> json) => TeacherScheduleEntry(
+    classId: json['classId'] ?? '',
+    className: json['className'] ?? '',
+    subject: json['subject'] ?? '',
+    period: json['period'] ?? 0,
+    day: json['day'] ?? 0,
+  );
+}
+
 class Teacher {
   final String? id;
   final String name;
@@ -97,6 +129,7 @@ class Teacher {
   final BankDetails? bankDetails;
   final LeaveInfo? leaves;
   final EmergencyContact? emergencyContact;
+  final List<TeacherScheduleEntry> schedule;
 
   Teacher({
     this.id,
@@ -125,6 +158,7 @@ class Teacher {
     this.bankDetails,
     this.leaves,
     this.emergencyContact,
+    this.schedule = const [],
   });
 
   Map<String, dynamic> toJson() {
@@ -155,6 +189,7 @@ class Teacher {
       'bankDetails': bankDetails?.toJson(),
       'leaves': leaves?.toJson(),
       'emergencyContact': emergencyContact?.toJson(),
+      'schedule': schedule.map((e) => e.toJson()).toList(),
     };
   }
 
@@ -186,6 +221,7 @@ class Teacher {
       bankDetails: json['bankDetails'] != null ? BankDetails.fromJson(json['bankDetails']) : null,
       leaves: json['leaves'] != null ? LeaveInfo.fromJson(json['leaves']) : null,
       emergencyContact: json['emergencyContact'] != null ? EmergencyContact.fromJson(json['emergencyContact']) : null,
+      schedule: (json['schedule'] as List?)?.map((e) => TeacherScheduleEntry.fromJson(e)).toList() ?? [],
     );
   }
 }

@@ -6,7 +6,6 @@ const Teacher = require('../models/Teacher');
 const Class = require('../models/Class');
 const FeeStructure = require('../models/FeeStructure');
 const FeePayment = require('../models/FeePayment');
-const Attendance = require('../models/Attendance');
 const AcademicSession = require('../models/AcademicSession');
 const { protect } = require('../middlewares/authMiddleware');
 
@@ -29,8 +28,7 @@ router.get('/stats', protect, async (req, res) => {
             classes: classCount,
             totalCollection: 0,
             expectedCollection: 0,
-            pendingFeesCount: 0,
-            attendancePercentage: 0
+            pendingFeesCount: 0
           },
           recentStudents: [],
         }
@@ -76,23 +74,6 @@ router.get('/stats', protect, async (req, res) => {
     const paidStudentIds = await FeePayment.distinct('student', { academicSession: activeSession._id });
     const pendingFeesCount = Math.max(0, studentCount - paidStudentIds.length);
 
-    // 4. Attendance (Today)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const todayAttendance = await Attendance.find({
-      date: { $gte: today, $lt: tomorrow },
-      session: activeSession._id
-    });
-
-    let attendancePercentage = 0;
-    if (todayAttendance.length > 0) {
-      const presentCount = todayAttendance.filter(a => ['Present', 'Late'].includes(a.status)).length;
-      attendancePercentage = Math.round((presentCount / todayAttendance.length) * 100);
-    }
-
     const recentStudents = await Student.find({ academicSession: activeSession._id })
       .sort({ createdAt: -1 })
       .limit(5)
@@ -117,7 +98,6 @@ router.get('/stats', protect, async (req, res) => {
           totalCollection,
           expectedCollection,
           pendingFeesCount,
-          attendancePercentage,
           monthlySalaryExpense
         },
         recentStudents,

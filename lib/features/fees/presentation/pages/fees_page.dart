@@ -11,7 +11,10 @@ import 'package:jayasha_childrens_academy/features/students/presentation/pages/s
 import 'package:jayasha_childrens_academy/core/models/academic_session.dart';
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
+import 'package:collection/collection.dart';
 import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_repository.dart';
+import 'package:jayasha_childrens_academy/features/fees/presentation/widgets/add_payment_dialog.dart';
+import 'package:jayasha_childrens_academy/features/fees/presentation/pages/pending_fees_page.dart';
 import 'package:intl/intl.dart';
 
 class FeesPage extends StatefulWidget {
@@ -26,7 +29,7 @@ class _FeesPageState extends State<FeesPage> {
   bool _showStructure = false;
   bool _isLoading = false;
   String? _errorMessage;
-  List<StudentAdmission> _students = [];
+  List<Map<String, dynamic>> _payments = [];
   Map<String, dynamic> _feeStats = {
     'totalPending': 0.0,
     'pendingStudents': 0,
@@ -63,13 +66,13 @@ class _FeesPageState extends State<FeesPage> {
 
       // Fetch in parallel for efficiency
       final results = await Future.wait([
-        studentRepo.getStudents(),
+        feeRepo.getAllPayments(),
         feeRepo.getFeeStats(),
       ]);
 
       if (mounted) {
         setState(() {
-          _students = results[0] as List<StudentAdmission>;
+          _payments = results[0] as List<Map<String, dynamic>>;
           final stats = results[1] as Map<String, dynamic>;
           if (stats.isNotEmpty) {
             _feeStats = stats;
@@ -127,7 +130,7 @@ class _FeesPageState extends State<FeesPage> {
           const SizedBox(height: 20),
           _buildSearchAndFilters(),
           const SizedBox(height: 16),
-          Expanded(child: _buildStudentTable()),
+          Expanded(child: _buildPaymentHistoryTable()),
         ],
       ),
     );
@@ -168,7 +171,10 @@ class _FeesPageState extends State<FeesPage> {
             ),
             const SizedBox(width: 12),
             ElevatedButton.icon(
-              onPressed: () => _showAddFeeDialog(context),
+              onPressed: () => showAddPaymentDialog(
+                context,
+                onSuccess: _fetchData,
+              ),
               icon: const Icon(Icons.add_circle_outline, size: 18),
               label: const Text('New Payment'),
               style: ElevatedButton.styleFrom(
@@ -188,43 +194,59 @@ class _FeesPageState extends State<FeesPage> {
   Widget _buildQuickStats() {
     return Row(
       children: [
-        _buildMiniStat('Pending Dues', '₹ ${_feeStats['totalPending']}', Colors.red, Icons.account_balance_wallet_outlined),
+        _buildMiniStat(
+          'Pending Dues',
+          '₹ ${_feeStats['totalPending'] ?? 0.0}',
+          Colors.red,
+          Icons.account_balance_wallet_outlined,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PendingFeesPage())),
+        ),
         const SizedBox(width: 16),
-        _buildMiniStat('Students Pending', _feeStats['pendingStudents'].toString(), Colors.orange, Icons.people_outline),
+        _buildMiniStat(
+          'Students Pending',
+          (_feeStats['pendingStudents'] ?? 0).toString(),
+          Colors.orange,
+          Icons.people_outline,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PendingFeesPage())),
+        ),
         const SizedBox(width: 16),
-        _buildMiniStat('Collection (Today)', '₹ ${_feeStats['todayCollection']}', Colors.green, Icons.analytics_outlined),
+        _buildMiniStat('Collection (Today)', '₹ ${_feeStats['todayCollection'] ?? 0.0}', Colors.green, Icons.analytics_outlined),
       ],
     );
   }
 
-  Widget _buildMiniStat(String label, String value, Color color, IconData icon) {
+  Widget _buildMiniStat(String label, String value, Color color, IconData icon, {VoidCallback? onTap}) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 20),
               ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
-                Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-              ],
-            ),
-          ],
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                  Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -246,7 +268,7 @@ class _FeesPageState extends State<FeesPage> {
               controller: _searchController,
               style: const TextStyle(fontSize: 14),
               decoration: const InputDecoration(
-                hintText: 'Search student...',
+                hintText: 'Search by student name or adm no...',
                 prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(vertical: 8),
@@ -261,12 +283,22 @@ class _FeesPageState extends State<FeesPage> {
     );
   }
 
-  Widget _buildStudentTable() {
-    final filteredStudents = _students.where((s) =>
-        s.name.toLowerCase().contains(_searchController.text.toLowerCase()) ||
-        s.admissionNumber.contains(_searchController.text)).toList();
+  Widget _buildPaymentHistoryTable() {
+    final query = _searchController.text.toLowerCase();
+    final filteredPayments = _payments.where((p) {
+      final name = (p['studentName'] ?? '').toString().toLowerCase();
+      final admNo = (p['admissionNumber'] ?? '').toString().toLowerCase();
+      return name.contains(query) || admNo.contains(query);
+    }).toList();
 
-    if (!_isLoading && filteredStudents.isEmpty) {
+    // Sort by most recent
+    filteredPayments.sort((a, b) {
+      final dateA = a['date'] as DateTime;
+      final dateB = b['date'] as DateTime;
+      return dateB.compareTo(dateA);
+    });
+
+    if (!_isLoading && filteredPayments.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(32),
@@ -278,10 +310,10 @@ class _FeesPageState extends State<FeesPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_search_outlined, size: 48, color: Colors.grey.shade300),
+            Icon(Icons.history_outlined, size: 48, color: Colors.grey.shade300),
             const SizedBox(height: 16),
             Text(
-              _searchController.text.isEmpty ? 'No students found' : 'No student matching "${_searchController.text}"',
+              _searchController.text.isEmpty ? 'No payment history found' : 'No matches for "${_searchController.text}"',
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
             ),
             if (_searchController.text.isNotEmpty)
@@ -304,395 +336,61 @@ class _FeesPageState extends State<FeesPage> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: SingleChildScrollView(
-          child: DataTable(
-            columns: const [
-              DataColumn(label: Text('Adm No', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text('Name', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text('Section', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-            ],
-            rows: filteredStudents.map((student) => DataRow(cells: [
-              DataCell(Text(student.admissionNumber)),
-              DataCell(Text(student.name)),
-              DataCell(Text(student.section ?? 'N/A')),
-              DataCell(Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.payment, size: 18, color: AppColors.primary),
-                    onPressed: () => _showAddFeeDialog(context, prefilledStudent: student),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textSecondary),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => StudentDetailPage(student: student),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              )),
-            ])).toList(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAddFeeDialog(BuildContext context, {StudentAdmission? prefilledStudent}) async {
-    final feeRepo = Provider.of<fee_domain.FeeRepository>(context, listen: false);
-    final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
-    final examRepo = Provider.of<ExamRepository>(context, listen: false);
-    final studentRepo = Provider.of<StudentRepository>(context, listen: false);
-
-    AcademicSession? currentSession;
-    List<dynamic> feeStructures = [];
-    List<dynamic> exams = [];
-    bool isFetchingData = false;
-
-    try {
-      currentSession = await dashboardRepo.getCurrentSession();
-      if (currentSession != null) {
-        feeStructures = await feeRepo.getFeeStructures();
-        final examResponse = await examRepo.getExams(currentSession.id!);
-        if (examResponse['success'] == true) {
-          exams = examResponse['data'] ?? [];
-        }
-      }
-    } catch (e) {
-      debugPrint('Error preparing payment dialog: $e');
-    }
-
-    if (currentSession == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No active academic session found'), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
-
-    final TextEditingController admNoController = TextEditingController(text: prefilledStudent?.admissionNumber);
-    final TextEditingController amountController = TextEditingController();
-    StudentAdmission? foundStudent = prefilledStudent;
-    PaymentMode selectedMode = PaymentMode.cash;
-    FeeCategory selectedCategory = FeeCategory.monthly;
-    bool isFullPayment = true;
-    String? selectedMonth;
-    String? selectedExamId;
-
-    final List<String> months = [
-      'April', 'May', 'June', 'July', 'August', 'September',
-      'October', 'November', 'December', 'January', 'February', 'March'
-    ];
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          // Helper to get base amount from structure
-          double getBaseAmount(FeeCategory category) {
-            if (foundStudent == null) return 0.0;
-            final classStructure = feeStructures.firstWhere(
-              (s) => s['class'] != null && (s['class']['_id'] == foundStudent!.currentClassId || s['class'] == foundStudent!.currentClassId),
-              orElse: () => null,
-            );
-
-            if (classStructure != null && classStructure['components'] != null) {
-              final components = classStructure['components'] as List;
-              dynamic component;
-
-              switch (category) {
-                case FeeCategory.monthly:
-                  component = components.firstWhere((c) =>
-                    c['name'].toString().toLowerCase().contains('monthly') ||
-                    c['name'].toString().toLowerCase().contains('tuition'),
-                    orElse: () => null);
-                  break;
-                case FeeCategory.admission:
-                  component = components.firstWhere((c) =>
-                    c['name'].toString().toLowerCase().contains('admission'),
-                    orElse: () => null);
-                  break;
-                case FeeCategory.exam:
-                  component = components.firstWhere((c) =>
-                    c['name'].toString().toLowerCase().contains('exam'),
-                    orElse: () => null);
-                  break;
-                default:
-                  break;
-              }
-
-              if (component != null) {
-                return double.tryParse(component['amount'].toString()) ?? 0.0;
-              }
-            }
-            return 0.0;
-          }
-
-          void updateAmount() {
-            if (isFullPayment) {
-              amountController.text = getBaseAmount(selectedCategory).toString();
-            }
-          }
-
-          final totalFee = getBaseAmount(selectedCategory);
-          final enteredAmount = double.tryParse(amountController.text) ?? 0.0;
-          final dueAmount = totalFee - enteredAmount;
-
-          return AlertDialog(
-            title: const Text('Add Fee Payment'),
-            content: SizedBox(
-              width: 500,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: admNoController,
-                      decoration: InputDecoration(
-                        labelText: 'Admission Number',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: () async {
+          scrollDirection: Axis.horizontal,
+          child: SingleChildScrollView(
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Student Name', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Adm No', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Category', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Mode', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Remarks', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+              rows: filteredPayments.map((payment) {
+                final date = payment['date'] as DateTime;
+                return DataRow(cells: [
+                  DataCell(Text(DateFormat('dd MMM yyyy').format(date))),
+                  DataCell(Text(payment['studentName'] ?? 'Unknown')),
+                  DataCell(Text(payment['admissionNumber'] ?? 'N/A')),
+                  DataCell(Text(payment['category'].toString().split('.').last.toUpperCase())),
+                  DataCell(Text('₹${payment['amount']}')),
+                  DataCell(Text(payment['mode'].toString().split('.').last.toUpperCase())),
+                  DataCell(Text(payment['remarks'] ?? '-')),
+                  DataCell(Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textSecondary),
+                        tooltip: 'View Student',
+                        onPressed: () async {
+                          final studentId = payment['studentId'];
+                          if (studentId != null) {
                             try {
-                              final results = await studentRepo.getStudents(admissionNumber: admNoController.text);
-                              if (results.isNotEmpty) {
-                                setDialogState(() {
-                                  foundStudent = results.first;
-                                  updateAmount();
-                                });
-                              } else {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Student not found')),
-                                  );
-                                }
+                              final studentRepo = Provider.of<StudentRepository>(context, listen: false);
+                              final student = await studentRepo.getStudentById(studentId);
+                              if (student != null && mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => StudentDetailPage(student: student),
+                                  ),
+                                );
                               }
                             } catch (e) {
-                              debugPrint('Error searching student: $e');
+                              debugPrint('Error navigating to student detail: $e');
                             }
-                          },
-                        ),
-                      ),
-                      onSubmitted: (val) async {
-                        try {
-                          final results = await studentRepo.getStudents(admissionNumber: val);
-                          if (results.isNotEmpty) {
-                            setDialogState(() {
-                              foundStudent = results.first;
-                              updateAmount();
-                            });
-                          }
-                        } catch (e) {
-                          debugPrint('Error searching student on submit: $e');
-                        }
-                      },
-                    ),
-                    if (foundStudent != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-                        ),
-                        child: Column(
-                          children: [
-                            _buildDialogInfoRow('Student', foundStudent!.name, isBold: true),
-                            _buildDialogInfoRow('Class', '${foundStudent!.className ?? 'N/A'} ${foundStudent!.section ?? ''}'),
-                            _buildDialogInfoRow('Father', foundStudent!.fatherName),
-                            _buildDialogInfoRow('Mother', foundStudent!.motherName),
-                            _buildDialogInfoRow('Roll No', foundStudent!.rollNumber ?? 'N/A'),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      DropdownButtonFormField<FeeCategory>(
-                        value: selectedCategory,
-                        items: FeeCategory.values.map((e) => DropdownMenuItem(value: e, child: Text(e.name.toUpperCase()))).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setDialogState(() {
-                              selectedCategory = val;
-                              updateAmount();
-                            });
                           }
                         },
-                        decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
                       ),
-                      const SizedBox(height: 16),
-                      if (selectedCategory == FeeCategory.monthly) ...[
-                        DropdownButtonFormField<String>(
-                          value: selectedMonth,
-                          hint: const Text('Select Month'),
-                          items: months.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                          onChanged: (val) => setDialogState(() => selectedMonth = val),
-                          decoration: const InputDecoration(labelText: 'Month', border: OutlineInputBorder()),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      if (selectedCategory == FeeCategory.exam) ...[
-                        DropdownButtonFormField<String>(
-                          value: selectedExamId,
-                          hint: const Text('Select Exam'),
-                          items: exams.map((e) => DropdownMenuItem(value: e['_id'].toString(), child: Text(e['name']))).toList(),
-                          onChanged: (val) => setDialogState(() => selectedExamId = val),
-                          decoration: const InputDecoration(labelText: 'Exam', border: OutlineInputBorder()),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      const Text('Payment Option', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: RadioListTile<bool>(
-                              title: const Text('Full'),
-                              value: true,
-                              groupValue: isFullPayment,
-                              onChanged: (val) => setDialogState(() {
-                                isFullPayment = val!;
-                                updateAmount();
-                              }),
-                            ),
-                          ),
-                          Expanded(
-                            child: RadioListTile<bool>(
-                              title: const Text('Partial'),
-                              value: false,
-                              groupValue: isFullPayment,
-                              onChanged: (val) => setDialogState(() => isFullPayment = val!),
-                            ),
-                          ),
-                        ],
-                      ),
-                      TextField(
-                        controller: amountController,
-                        keyboardType: TextInputType.number,
-                        readOnly: isFullPayment,
-                        decoration: InputDecoration(
-                          labelText: isFullPayment ? 'Amount (Fixed)' : 'Enter Amount to Pay',
-                          border: const OutlineInputBorder(),
-                          filled: isFullPayment,
-                          fillColor: isFullPayment ? Colors.grey.shade100 : null,
-                          suffixIcon: isFullPayment ? const Icon(Icons.lock_outline, size: 20) : null,
-                        ),
-                        onChanged: (val) => setDialogState(() {}),
-                      ),
-                      if (!isFullPayment) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Total Fee: ₹$totalFee', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                            Text('Due: ₹${dueAmount.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: dueAmount > 0 ? Colors.orange : Colors.green
-                              )
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<PaymentMode>(
-                        value: selectedMode,
-                        items: PaymentMode.values.map((e) => DropdownMenuItem(value: e, child: Text(e.name.toUpperCase()))).toList(),
-                        onChanged: (val) => setDialogState(() => selectedMode = val!),
-                        decoration: const InputDecoration(labelText: 'Mode', border: OutlineInputBorder()),
-                      ),
-                    ]
-                  ],
-                ),
-              ),
+                    ],
+                  )),
+                ]);
+              }).toList(),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-              if (foundStudent != null)
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                  onPressed: () async {
-                    try {
-                      final amount = double.tryParse(amountController.text) ?? 0;
-                      if (amount <= 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid amount')));
-                        return;
-                      }
-                      if (selectedCategory == FeeCategory.monthly && selectedMonth == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a month')));
-                        return;
-                      }
-                      if (selectedCategory == FeeCategory.exam && selectedExamId == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an exam')));
-                        return;
-                      }
-
-                      String remarks = isFullPayment ? 'Full Payment' : 'Partial Payment';
-                      if (selectedCategory == FeeCategory.monthly) remarks += ' - Fee for $selectedMonth';
-                      if (selectedCategory == FeeCategory.exam) {
-                        final exam = exams.firstWhere((e) => e['_id'].toString() == selectedExamId);
-                        remarks += ' - Exam: ${exam['name']}';
-                      }
-
-                      final payment = FeePayment(
-                        studentId: foundStudent!.id!,
-                        academicSessionId: currentSession!.id!,
-                        amount: amount,
-                        date: DateTime.now(),
-                        mode: selectedMode,
-                        category: selectedCategory,
-                        remarks: remarks,
-                      );
-
-                      final success = await feeRepo.recordPayment(payment);
-                      if (success && context.mounted) {
-                        // Refresh dashboard stats
-                        Provider.of<DashboardRepository>(context, listen: false).getDashboardStats();
-                        Navigator.pop(context);
-                        _fetchData();
-
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Payment Successful'),
-                            content: Text('₹$amount recorded for ${foundStudent!.name}.'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-                              ElevatedButton(
-                                onPressed: () async {
-                                  Navigator.pop(ctx);
-                                  await PdfGenerator.downloadFeeReceipt(
-                                    student: foundStudent!,
-                                    payment: payment,
-                                    sessionName: currentSession!.sessionName,
-                                  );
-                                },
-                                child: const Text('Download Receipt'),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      debugPrint('Error recording payment: $e');
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to record payment: $e'), backgroundColor: Colors.red),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Submit'),
-                )
-            ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }

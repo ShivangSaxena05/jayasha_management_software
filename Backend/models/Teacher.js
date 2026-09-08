@@ -38,27 +38,21 @@ const teacherSchema = mongoose.Schema(
     },
     maritalStatus: {
       type: String,
-      required: true,
     },
     address: {
       type: String,
-      required: true,
     },
     dateOfJoining: {
       type: String,
-      required: true,
     },
     department: {
       type: String,
-      required: true,
     },
     qualification: {
       type: String,
-      required: true,
     },
     experience: {
       type: String,
-      required: true,
     },
     status: {
       type: String,
@@ -87,7 +81,6 @@ const teacherSchema = mongoose.Schema(
     },
     baseSalary: {
       type: Number,
-      required: true,
       default: 0,
     },
     bankDetails: {
@@ -111,6 +104,15 @@ const teacherSchema = mongoose.Schema(
       phone: String,
       relation: String,
     },
+    schedule: [
+      {
+        classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },
+        className: String,
+        subject: String,
+        period: Number,
+        day: Number,
+      }
+    ]
   },
   {
     timestamps: true,
