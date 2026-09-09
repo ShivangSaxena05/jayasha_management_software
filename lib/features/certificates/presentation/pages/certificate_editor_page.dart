@@ -43,26 +43,29 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
   // before). School Name / Title / Body are treated as mandatory elements
   // and are not removable.
   Map<String, dynamic> _schoolNameStyle = {
-    'bold': true, 'italic': false, 'underline': false, 'color': 0xFF0D47A1, 'fontSize': 24.0,
+    'bold': true, 'italic': false, 'underline': false, 'color': 0xFF0D47A1, 'fontSize': 24.0, 'align': 'center',
   };
   Map<String, dynamic> _subtitleStyle = {
-    'bold': false, 'italic': false, 'underline': false, 'color': 0xFF000000, 'fontSize': 14.0, 'enabled': true,
+    'bold': false, 'italic': false, 'underline': false, 'color': 0xFF000000, 'fontSize': 14.0, 'enabled': true, 'align': 'center',
   };
   Map<String, dynamic> _titleStyle = {
-    'bold': true, 'italic': false, 'underline': true, 'color': 0xFF000000, 'fontSize': 20.0,
+    'bold': true, 'italic': false, 'underline': true, 'color': 0xFF000000, 'fontSize': 20.0, 'align': 'center',
   };
   Map<String, dynamic> _bodyStyle = {
     'bold': false, 'italic': false, 'underline': false, 'color': 0xFF000000, 'align': 'justify', 'fontSize': 16.0,
   };
   Map<String, dynamic> _dateStyle = {
-    'bold': false, 'italic': false, 'underline': false, 'color': 0xFF000000, 'fontSize': 12.0, 'enabled': true,
+    'bold': false, 'italic': false, 'underline': false, 'color': 0xFF000000, 'fontSize': 12.0, 'enabled': true, 'align': 'left',
   };
   Map<String, dynamic> _placeStyle = {
-    'bold': false, 'italic': false, 'underline': false, 'color': 0xFF000000, 'fontSize': 12.0, 'enabled': true,
+    'bold': false, 'italic': false, 'underline': false, 'color': 0xFF000000, 'fontSize': 12.0, 'enabled': true, 'align': 'left',
   };
   Map<String, dynamic> _principalLabelStyle = {
-    'bold': true, 'italic': false, 'underline': false, 'color': 0xFF000000, 'fontSize': 14.0, 'enabled': true,
+    'bold': true, 'italic': false, 'underline': false, 'color': 0xFF000000, 'fontSize': 14.0, 'enabled': true, 'align': 'center',
   };
+
+  bool _showWatermark = true;
+  double _watermarkOpacity = 0.3;
 
   static const List<double> _fontSizeOptions = [10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40];
 
@@ -108,6 +111,9 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
     _dateStyle = _mergeStyle(_dateStyle, details['dateStyle']);
     _placeStyle = _mergeStyle(_placeStyle, details['placeStyle']);
     _principalLabelStyle = _mergeStyle(_principalLabelStyle, details['principalLabelStyle']);
+
+    _showWatermark = details['showWatermark'] ?? true;
+    _watermarkOpacity = (details['watermarkOpacity'] ?? 0.3).toDouble();
   }
 
   Map<String, dynamic> _mergeStyle(Map<String, dynamic> defaults, dynamic saved) {
@@ -177,6 +183,8 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
       'placeStyle': _placeStyle,
       'principalLabelStyle': _principalLabelStyle,
       'issueDate': widget.certificateData?['issueDate'] ?? DateTime.now().toIso8601String(),
+      'showWatermark': _showWatermark,
+      'watermarkOpacity': _watermarkOpacity,
     };
   }
 
@@ -326,6 +334,27 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
                     const SizedBox(height: 12),
                     _buildStyleControls('Body Text', _bodyStyle, (newStyle) => setState(() => _bodyStyle = newStyle), showAlign: true),
                     const Divider(height: 40),
+                    _buildSectionHeader('Watermark Settings'),
+                    const SizedBox(height: 16),
+                    SwitchListTile(
+                      title: const Text('Show School Logo as Watermark'),
+                      value: _showWatermark,
+                      onChanged: (val) => setState(() => _showWatermark = val),
+                      activeColor: AppColors.primary,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    if (_showWatermark) ...[
+                      const Text('Watermark Opacity', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                      Slider(
+                        value: _watermarkOpacity,
+                        min: 0.05,
+                        max: 1.0,
+                        divisions: 19,
+                        label: '${(_watermarkOpacity * 100).toInt()}%',
+                        onChanged: (val) => setState(() => _watermarkOpacity = val),
+                      ),
+                    ],
+                    const Divider(height: 40),
                     _buildSectionHeader('Header & Footer Styling'),
                     const SizedBox(height: 4),
                     Text(
@@ -336,36 +365,37 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
                     _buildStyleableInput(
                       'School Name', (val) => setState(() => _schoolName = val), _schoolName,
                       _schoolNameStyle, (s) => setState(() => _schoolNameStyle = s),
+                      showAlign: true,
                     ),
                     const SizedBox(height: 16),
                     _buildStyleableInput(
                       'Subtitle', (val) => setState(() => _subtitle = val), _subtitle,
                       _subtitleStyle, (s) => setState(() => _subtitleStyle = s),
-                      removable: true,
+                      removable: true, showAlign: true,
                     ),
                     const SizedBox(height: 16),
                     _buildStyleableInput(
                       'Title', null, null,
                       _titleStyle, (s) => setState(() => _titleStyle = s),
-                      onlyStyle: true,
+                      onlyStyle: true, showAlign: true,
                     ),
                     const SizedBox(height: 16),
                     _buildStyleableInput(
                       'Date', null, null,
                       _dateStyle, (s) => setState(() => _dateStyle = s),
-                      onlyStyle: true, removable: true,
+                      onlyStyle: true, removable: true, showAlign: true,
                     ),
                     const SizedBox(height: 16),
                     _buildStyleableInput(
                       'Place', (val) => setState(() => _place = val), _place,
                       _placeStyle, (s) => setState(() => _placeStyle = s),
-                      removable: true,
+                      removable: true, showAlign: true,
                     ),
                     const SizedBox(height: 16),
                     _buildStyleableInput(
                       'Principal Label', (val) => setState(() => _principalLabel = val), _principalLabel,
                       _principalLabelStyle, (s) => setState(() => _principalLabelStyle = s),
-                      removable: true,
+                      removable: true, showAlign: true,
                     ),
                     const SizedBox(height: 32),
                     SizedBox(
@@ -426,6 +456,7 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
     Function(Map<String, dynamic>) onStyleChanged, {
     bool onlyStyle = false,
     bool removable = false,
+    bool showAlign = false,
   }) {
     final bool isEnabled = (style['enabled'] ?? true) as bool;
 
@@ -464,7 +495,7 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
             ),
           ],
           const SizedBox(height: 8),
-          _buildStyleControls(label, style, onStyleChanged),
+          _buildStyleControls(label, style, onStyleChanged, showAlign: showAlign),
         ] else
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 4),
@@ -524,6 +555,7 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
           const SizedBox(width: 8),
           _AlignButton(icon: Icons.format_align_left, isSelected: style['align'] == 'left', onTap: () => _updateStyle(style, 'align', 'left', onStyleChanged)),
           _AlignButton(icon: Icons.format_align_center, isSelected: style['align'] == 'center', onTap: () => _updateStyle(style, 'align', 'center', onStyleChanged)),
+          _AlignButton(icon: Icons.format_align_right, isSelected: style['align'] == 'right', onTap: () => _updateStyle(style, 'align', 'right', onStyleChanged)),
           _AlignButton(icon: Icons.format_align_justify, isSelected: style['align'] == 'justify' || style['align'] == null, onTap: () => _updateStyle(style, 'align', 'justify', onStyleChanged)),
         ]
       ],
@@ -575,54 +607,84 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
     final bool showPlace = (_placeStyle['enabled'] ?? true) as bool;
     final bool showPrincipalLabel = (_principalLabelStyle['enabled'] ?? true) as bool;
 
-    return Column(
+    return Stack(
       children: [
-        Text(_schoolName, style: _getPreviewStyle(_schoolNameStyle), textAlign: TextAlign.center),
-        if (showSubtitle) ...[
-          const SizedBox(height: 4),
-          Text(_subtitle, style: _getPreviewStyle(_subtitleStyle), textAlign: TextAlign.center),
-        ],
-        const SizedBox(height: 10),
-        const Divider(thickness: 1, color: Colors.black),
-        const SizedBox(height: 30),
-        Text(
-          (_selectedType == 'Custom Certificate' ? _customTitleController.text : _selectedType).toUpperCase(),
-          style: _getPreviewStyle(_titleStyle),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 50),
-        Expanded(
-          child: Text(
-            _bodyController.text,
-            style: _getPreviewStyle(_bodyStyle).copyWith(height: 1.6),
-            textAlign: _getAlign(_bodyStyle['align']),
-          ),
-        ),
-        const SizedBox(height: 40),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (showDate)
-                  Text('Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}', style: _getPreviewStyle(_dateStyle)),
-                if (showPlace)
-                  Text('Place: $_place', style: _getPreviewStyle(_placeStyle)),
-              ],
+        if (_showWatermark)
+          Center(
+            child: Opacity(
+              opacity: _watermarkOpacity,
+              child: Image.asset(
+                'assets/images/JCB_Logo.png',
+                width: 300,
+                fit: BoxFit.contain,
+              ),
             ),
-            Column(
+          ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(_schoolName, style: _getPreviewStyle(_schoolNameStyle), textAlign: _getAlign(_schoolNameStyle['align'])),
+            if (showSubtitle) ...[
+              const SizedBox(height: 4),
+              Text(_subtitle, style: _getPreviewStyle(_subtitleStyle), textAlign: _getAlign(_subtitleStyle['align'])),
+            ],
+            const SizedBox(height: 10),
+            const Divider(thickness: 1, color: Colors.black),
+            const SizedBox(height: 30),
+            Text(
+              (_selectedType == 'Custom Certificate' ? _customTitleController.text : _selectedType).toUpperCase(),
+              style: _getPreviewStyle(_titleStyle),
+              textAlign: _getAlign(_titleStyle['align']),
+            ),
+            const SizedBox(height: 50),
+            Expanded(
+              child: Text(
+                _bodyController.text,
+                style: _getPreviewStyle(_bodyStyle).copyWith(height: 1.6),
+                textAlign: _getAlign(_bodyStyle['align']),
+              ),
+            ),
+            const SizedBox(height: 40),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                const SizedBox(height: 40),
-                if (showPrincipalLabel)
-                  Text(_principalLabel, style: _getPreviewStyle(_principalLabelStyle)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: _getCrossAlign(_dateStyle['align'] ?? _placeStyle['align']),
+                    children: [
+                      if (showDate)
+                        Text('Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}', style: _getPreviewStyle(_dateStyle), textAlign: _getAlign(_dateStyle['align'])),
+                      if (showPlace)
+                        Text('Place: $_place', style: _getPreviewStyle(_placeStyle), textAlign: _getAlign(_placeStyle['align'])),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: _getCrossAlign(_principalLabelStyle['align']),
+                    children: [
+                      const SizedBox(height: 40),
+                      if (showPrincipalLabel)
+                        Text(_principalLabel, style: _getPreviewStyle(_principalLabelStyle), textAlign: _getAlign(_principalLabelStyle['align'])),
+                    ],
+                  ),
+                ),
               ],
             ),
           ],
         ),
       ],
     );
+  }
+
+  CrossAxisAlignment _getCrossAlign(String? align) {
+    switch (align) {
+      case 'left': return CrossAxisAlignment.start;
+      case 'right': return CrossAxisAlignment.end;
+      case 'center': return CrossAxisAlignment.center;
+      default: return CrossAxisAlignment.start;
+    }
   }
 
   // CHANGED: now reads fontSize from the style map itself instead of

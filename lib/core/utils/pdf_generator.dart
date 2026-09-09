@@ -34,7 +34,7 @@ class PdfGenerator {
     pw.TextStyle getStyle(Map<String, dynamic>? style, {double fontSize = 12}) {
       if (style == null) return pw.TextStyle(fontSize: fontSize);
       return pw.TextStyle(
-        fontSize: fontSize,
+        fontSize: (style['fontSize'] ?? fontSize).toDouble(),
         fontWeight: style['bold'] == true ? pw.FontWeight.bold : pw.FontWeight.normal,
         fontStyle: style['italic'] == true ? pw.FontStyle.italic : pw.FontStyle.normal,
         decoration: style['underline'] == true ? pw.TextDecoration.underline : pw.TextDecoration.none,
@@ -57,69 +57,115 @@ class PdfGenerator {
       }
     }
 
+    pw.CrossAxisAlignment getCrossAlign(String? align) {
+      switch (align) {
+        case 'left':
+          return pw.CrossAxisAlignment.start;
+        case 'right':
+          return pw.CrossAxisAlignment.end;
+        case 'center':
+          return pw.CrossAxisAlignment.center;
+        default:
+          return pw.CrossAxisAlignment.start;
+      }
+    }
+
+    final logoImage = (details['showWatermark'] ?? true)
+        ? pw.MemoryImage((await rootBundle.load('assets/images/JCB_Logo.png')).buffer.asUint8List())
+        : null;
+    final double watermarkOpacity = (details['watermarkOpacity'] ?? 0.3).toDouble();
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         build: (pw.Context context) {
-          return pw.Container(
-            padding: const pw.EdgeInsets.all(40),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.black, width: 2),
-            ),
-            child: pw.Column(
-              children: [
-                pw.Text(
-                  details['schoolName'] ?? 'JAYASHA CHILDREN\'S ACADEMY',
-                  style: getStyle(details['schoolNameStyle'], fontSize: 26),
+          return pw.Stack(
+            children: [
+              if (logoImage != null)
+                pw.Center(
+                  child: pw.Opacity(
+                    opacity: watermarkOpacity,
+                    child: pw.Image(logoImage, width: 400),
+                  ),
                 ),
-                pw.SizedBox(height: 5),
-                pw.Text(
-                  details['subtitle'] ?? 'Affiliated to CBSE, New Delhi',
-                  style: getStyle(details['subtitleStyle'], fontSize: 14),
+              pw.Container(
+                padding: const pw.EdgeInsets.all(40),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.black, width: 2),
                 ),
-                pw.SizedBox(height: 10),
-                pw.Divider(thickness: 1),
-                pw.SizedBox(height: 40),
-                pw.Text(
-                  (details['title'] ?? type).toUpperCase(),
-                  style: getStyle(details['titleStyle'], fontSize: 20),
-                ),
-                pw.SizedBox(height: 60),
-                pw.Paragraph(
-                  text: details['body'] ?? '',
-                  style: getStyle(details['bodyStyle'], fontSize: 16).copyWith(lineSpacing: 5),
-                  textAlign: getAlign(details['bodyStyle']?['align']),
-                ),
-                pw.Spacer(),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          'Date: ${details['issueDate'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(details['issueDate'])) : DateFormat('dd/MM/yyyy').format(DateTime.now())}',
-                          style: getStyle(details['dateStyle'] ?? {'color': 0xFF000000}),
-                        ),
-                        pw.Text(
-                          'Place: ${details['place'] ?? 'School Office'}',
-                          style: getStyle(details['placeStyle']),
-                        ),
-                      ],
+                    pw.Text(
+                      details['schoolName'] ?? 'JAYASHA CHILDREN\'S ACADEMY',
+                      style: getStyle(details['schoolNameStyle'], fontSize: 26),
+                      textAlign: getAlign(details['schoolNameStyle']?['align']),
                     ),
-                    pw.Column(
+                    pw.SizedBox(height: 5),
+                    if (details['subtitleStyle']?['enabled'] ?? true)
+                      pw.Text(
+                        details['subtitle'] ?? 'Affiliated to CBSE, New Delhi',
+                        style: getStyle(details['subtitleStyle'], fontSize: 14),
+                        textAlign: getAlign(details['subtitleStyle']?['align']),
+                      ),
+                    pw.SizedBox(height: 10),
+                    pw.Divider(thickness: 1),
+                    pw.SizedBox(height: 40),
+                    pw.Text(
+                      (details['title'] ?? type).toUpperCase(),
+                      style: getStyle(details['titleStyle'], fontSize: 20),
+                      textAlign: getAlign(details['titleStyle']?['align']),
+                    ),
+                    pw.SizedBox(height: 60),
+                    pw.Paragraph(
+                      text: details['body'] ?? '',
+                      style: getStyle(details['bodyStyle'], fontSize: 16).copyWith(lineSpacing: 5),
+                      textAlign: getAlign(details['bodyStyle']?['align']),
+                    ),
+                    pw.Spacer(),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
-                        pw.SizedBox(height: 40),
-                        pw.Text(
-                          details['principalLabel'] ?? 'Principal Signature',
-                          style: getStyle(details['principalLabelStyle']),
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: getCrossAlign(details['dateStyle']?['align'] ?? details['placeStyle']?['align']),
+                            children: [
+                              if (details['dateStyle']?['enabled'] ?? true)
+                                pw.Text(
+                                  'Date: ${details['issueDate'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(details['issueDate'])) : DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+                                  style: getStyle(details['dateStyle'] ?? {'color': 0xFF000000}),
+                                  textAlign: getAlign(details['dateStyle']?['align']),
+                                ),
+                              if (details['placeStyle']?['enabled'] ?? true)
+                                pw.Text(
+                                  'Place: ${details['place'] ?? 'School Office'}',
+                                  style: getStyle(details['placeStyle']),
+                                  textAlign: getAlign(details['placeStyle']?['align']),
+                                ),
+                            ],
+                          ),
+                        ),
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: getCrossAlign(details['principalLabelStyle']?['align']),
+                            children: [
+                              pw.SizedBox(height: 40),
+                              if (details['principalLabelStyle']?['enabled'] ?? true)
+                                pw.Text(
+                                  details['principalLabel'] ?? 'Principal Signature',
+                                  style: getStyle(details['principalLabelStyle']),
+                                  textAlign: getAlign(details['principalLabelStyle']?['align']),
+                                ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),

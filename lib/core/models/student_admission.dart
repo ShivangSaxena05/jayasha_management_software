@@ -57,21 +57,21 @@ class StudentAdmission {
   factory StudentAdmission.fromJson(Map<String, dynamic> json) {
     return StudentAdmission(
       id: json['_id'],
-      admissionNumber: json['admissionNumber'],
+      admissionNumber: json['admissionNumber'] ?? '',
       rollNumber: json['rollNumber'],
-      name: json['name'],
-      dob: json['dob'],
-      gender: json['gender'],
-      currentClassId: json['currentClass'] is Map ? json['currentClass']['_id'] : (json['currentClass'] ?? ''),
+      name: json['name'] ?? '',
+      dob: json['dob'] ?? '',
+      gender: json['gender'] ?? '',
+      currentClassId: json['currentClass'] is Map ? json['currentClass']['_id'] : (json['currentClass']?.toString() ?? ''),
       className: json['currentClass'] is Map ? json['currentClass']['name'] : null,
       section: json['section'],
-      fatherName: json['fatherName'],
-      motherName: json['motherName'],
+      fatherName: json['fatherName'] ?? '',
+      motherName: json['motherName'] ?? '',
       guardianPhone: json['guardianPhone'] ?? json['phone'] ?? '',
-      address: json['address'],
-      admissionDate: json['admissionDate'],
+      address: json['address'] ?? '',
+      admissionDate: json['admissionDate'] ?? '',
       photoPath: json['photoPath'],
-      academicSessionId: json['academicSession'] is Map ? json['academicSession']['_id'] : (json['academicSession'] ?? ''),
+      academicSessionId: json['academicSession'] is Map ? json['academicSession']['_id'] : (json['academicSession']?.toString() ?? ''),
     );
   }
 
