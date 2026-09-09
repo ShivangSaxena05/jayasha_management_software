@@ -5,12 +5,10 @@ const schoolSettingsSchema = mongoose.Schema(
     schoolName: {
       type: String,
       required: true,
-      default: "Jayasha Children's Academy",
     },
     address: {
       type: String,
       required: true,
-      default: "Shivpuri, Madhya Pradesh",
     },
     phone: {
       type: String,

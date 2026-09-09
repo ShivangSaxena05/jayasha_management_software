@@ -30,8 +30,8 @@ class SchoolSettings {
   factory SchoolSettings.fromJson(Map<String, dynamic> json) {
     return SchoolSettings(
       id: json['_id'] ?? '',
-      schoolName: json['schoolName'] ?? "Jayasha Children's Academy",
-      address: json['address'] ?? "Shivpuri, Madhya Pradesh",
+      schoolName: json['schoolName'] ?? '',
+      address: json['address'] ?? '',
       phone: json['phone'] ?? '',
       email: json['email'] ?? '',
       website: json['website'] ?? '',

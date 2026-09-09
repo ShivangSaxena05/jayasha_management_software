@@ -352,87 +352,18 @@ class PdfGenerator {
     required String type,
     Map<String, dynamic>? details,
   }) async {
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Container(
-            padding: const pw.EdgeInsets.all(40),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.black, width: 2),
-            ),
-            child: pw.Column(
-              children: [
-                pw.Text(
-                  'JAYASHA CHILDREN\'S ACADEMY',
-                  style: pw.TextStyle(
-                    fontSize: 26,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.blue900,
-                  ),
-                ),
-                pw.SizedBox(height: 5),
-                pw.Text('Affiliated to CBSE, New Delhi', style: const pw.TextStyle(fontSize: 14)),
-                pw.SizedBox(height: 10),
-                pw.Divider(thickness: 1),
-                pw.SizedBox(height: 40),
-                pw.Text(
-                  type.toUpperCase(),
-                  style: pw.TextStyle(
-                    fontSize: 20,
-                    fontWeight: pw.FontWeight.bold,
-                    decoration: pw.TextDecoration.underline,
-                  ),
-                ),
-                pw.SizedBox(height: 60),
-                pw.Paragraph(
-                  text:
-                      'This is to certify that Master/Miss ${student.name}, son/daughter of Mr. ${student.fatherName}, is/was a bonafide student of this school studying in section ${student.section ?? 'N/A'} during the session ${details?['session'] ?? '2023-24'}.',
-                  style: pw.TextStyle(fontSize: 16, lineSpacing: 5),
-                  textAlign: pw.TextAlign.justify,
-                ),
-                pw.SizedBox(height: 40),
-                pw.Align(
-                  alignment: pw.Alignment.centerLeft,
-                  child: pw.Text(
-                    'His/Her date of birth according to the school records is ${DateFormat('dd-MM-yyyy').format(DateTime.parse(student.dob))}.',
-                    style: const pw.TextStyle(fontSize: 16),
-                  ),
-                ),
-                pw.Spacer(),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}'),
-                        pw.Text('Place: School Office'),
-                      ],
-                    ),
-                    pw.Column(
-                      children: [
-                        pw.SizedBox(height: 40),
-                        pw.Text('Principal Signature', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+    final pdf = await _buildCertificatePdf(
+      student: student,
+      type: type,
+      details: details ?? {},
     );
-
     await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
   }
 
   static Future<pw.Document> _buildFeeReceiptPdf({
     required StudentAdmission student,
     required FeePayment payment,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
     final pdf = pw.Document();
@@ -457,7 +388,7 @@ class PdfGenerator {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Text(
-                          'JAYASHA CHILDREN\'S ACADEMY',
+                          schoolDetails['schoolName'] ?? 'School Name',
                           style: pw.TextStyle(
                             fontSize: 24,
                             fontWeight: pw.FontWeight.bold,
@@ -465,21 +396,11 @@ class PdfGenerator {
                           ),
                         ),
                         pw.SizedBox(height: 4),
-                        pw.Text('Affiliated to CBSE, New Delhi', style: const pw.TextStyle(fontSize: 12)),
-                        pw.Text('Address: Near City Center, Shivpuri, Madhya Pradesh', style: const pw.TextStyle(fontSize: 10)),
-                        pw.Text('Contact: +91 9876543210 | Email: info@jayasha.edu.in', style: const pw.TextStyle(fontSize: 10)),
+                        if (schoolDetails['affiliation'] != null)
+                          pw.Text(schoolDetails['affiliation'], style: const pw.TextStyle(fontSize: 12)),
+                        pw.Text('Address: ${schoolDetails['address'] ?? ''}', style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text('Contact: ${schoolDetails['phone'] ?? ''} | Email: ${schoolDetails['email'] ?? ''}', style: const pw.TextStyle(fontSize: 10)),
                       ],
-                    ),
-                    pw.Container(
-                      width: 60,
-                      height: 60,
-                      decoration: const pw.BoxDecoration(
-                        color: PdfColors.blue900,
-                        shape: pw.BoxShape.circle,
-                      ),
-                      child: pw.Center(
-                        child: pw.Text('JCA', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
-                      ),
                     ),
                   ],
                 ),
@@ -646,18 +567,30 @@ class PdfGenerator {
   static Future<void> generateFeeReceipt({
     required StudentAdmission student,
     required FeePayment payment,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
-    final pdf = await _buildFeeReceiptPdf(student: student, payment: payment, sessionName: sessionName);
+    final pdf = await _buildFeeReceiptPdf(
+      student: student,
+      payment: payment,
+      schoolDetails: schoolDetails,
+      sessionName: sessionName,
+    );
     await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
   }
 
   static Future<void> downloadFeeReceipt({
     required StudentAdmission student,
     required FeePayment payment,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
-    final pdf = await _buildFeeReceiptPdf(student: student, payment: payment, sessionName: sessionName);
+    final pdf = await _buildFeeReceiptPdf(
+      student: student,
+      payment: payment,
+      schoolDetails: schoolDetails,
+      sessionName: sessionName,
+    );
     final bytes = await pdf.save();
 
     final fileName = 'Receipt_${student.admissionNumber}_${DateFormat('yyyyMMdd').format(payment.date)}.pdf';
@@ -684,6 +617,7 @@ class PdfGenerator {
 
   static Future<void> downloadReportCard({
     required dynamic markRecord,
+    required Map<String, dynamic> schoolDetails,
   }) async {
     final pdf = pw.Document();
     final student = markRecord['student'];
@@ -703,7 +637,7 @@ class PdfGenerator {
                 pw.Center(
                   child: pw.Column(
                     children: [
-                      pw.Text('JAYASHA CHILDREN\'S ACADEMY', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                      pw.Text(schoolDetails['schoolName'] ?? 'School Name', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
                       pw.Text('PROGRESS REPORT', style: pw.TextStyle(fontSize: 16, decoration: pw.TextDecoration.underline)),
                       pw.Text(exam['name'], style: pw.TextStyle(fontSize: 14)),
                     ],
@@ -802,10 +736,11 @@ class PdfGenerator {
     required dynamic exam,
     required List<dynamic> datesheet,
     required String className,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
     final pdf = pw.Document();
-    _addDatesheetPage(pdf, exam, datesheet, className, sessionName);
+    _addDatesheetPage(pdf, exam, datesheet, className, schoolDetails, sessionName);
     final bytes = await pdf.save();
     final fileName = 'Datesheet_${className.replaceAll(' ', '_')}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
 
@@ -833,6 +768,7 @@ class PdfGenerator {
     required dynamic exam,
     required List<dynamic> fullDatesheet,
     required List<dynamic> classes,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
     final pdf = pw.Document();
@@ -847,7 +783,7 @@ class PdfGenerator {
                 section.toString().isNotEmpty)
             ? ' - $section'
             : '';
-        _addDatesheetPage(pdf, exam, classEntries, '${cls['name']}$sectionSuffix', sessionName);
+        _addDatesheetPage(pdf, exam, classEntries, '${cls['name']}$sectionSuffix', schoolDetails, sessionName);
       }
     }
 
@@ -874,7 +810,7 @@ class PdfGenerator {
     }
   }
 
-  static void _addDatesheetPage(pw.Document pdf, dynamic exam, List<dynamic> datesheet, String className, String? sessionName) {
+  static void _addDatesheetPage(pw.Document pdf, dynamic exam, List<dynamic> datesheet, String className, Map<String, dynamic> schoolDetails, String? sessionName) {
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -890,7 +826,7 @@ class PdfGenerator {
                   child: pw.Column(
                     children: [
                       pw.Text(
-                        'JAYASHA CHILDREN\'S ACADEMY',
+                        schoolDetails['schoolName'] ?? 'School Name',
                         style: pw.TextStyle(
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
@@ -969,6 +905,7 @@ class PdfGenerator {
 
   static Future<pw.Document> _buildClassTimetablePdf({
     required SchoolClass schoolClass,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
     final pdf = pw.Document();
@@ -989,7 +926,7 @@ class PdfGenerator {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        'JAYASHA CHILDREN\'S ACADEMY',
+                        schoolDetails['schoolName'] ?? 'School Name',
                         style: pw.TextStyle(
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
@@ -1077,9 +1014,14 @@ class PdfGenerator {
 
   static Future<void> downloadClassTimetable({
     required SchoolClass schoolClass,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
-    final pdf = await _buildClassTimetablePdf(schoolClass: schoolClass, sessionName: sessionName);
+    final pdf = await _buildClassTimetablePdf(
+      schoolClass: schoolClass,
+      schoolDetails: schoolDetails,
+      sessionName: sessionName,
+    );
     final bytes = await pdf.save();
     final fileName = 'Timetable_${schoolClass.name.replaceAll(' ', '_')}.pdf';
 
@@ -1105,6 +1047,7 @@ class PdfGenerator {
 
   static Future<pw.Document> _buildTeacherTimetablePdf({
     required Teacher teacher,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
     final pdf = pw.Document();
@@ -1145,7 +1088,7 @@ class PdfGenerator {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        'JAYASHA CHILDREN\'S ACADEMY',
+                        schoolDetails['schoolName'] ?? 'School Name',
                         style: pw.TextStyle(
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
@@ -1233,9 +1176,14 @@ class PdfGenerator {
 
   static Future<void> downloadTeacherTimetable({
     required Teacher teacher,
+    required Map<String, dynamic> schoolDetails,
     String? sessionName,
   }) async {
-    final pdf = await _buildTeacherTimetablePdf(teacher: teacher, sessionName: sessionName);
+    final pdf = await _buildTeacherTimetablePdf(
+      teacher: teacher,
+      schoolDetails: schoolDetails,
+      sessionName: sessionName,
+    );
     final bytes = await pdf.save();
     final fileName = 'Schedule_${teacher.name.replaceAll(' ', '_')}.pdf';
 

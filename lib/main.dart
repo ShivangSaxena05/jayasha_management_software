@@ -38,7 +38,7 @@ void main() async {
         ChangeNotifierProvider<fee_domain.FeeRepository>(create: (_) => FeeRepositoryImpl()),
         Provider<CertificateRepository>(create: (_) => CertificateRepository()),
         Provider<ExamRepository>(create: (_) => ExamRepository()),
-        Provider<SchoolRepository>(create: (_) => SchoolRepository()),
+        ChangeNotifierProvider<SchoolRepository>(create: (_) => SchoolRepository()..getSettings()),
       ],
       child: MyApp(isComplete: isComplete),
     ),

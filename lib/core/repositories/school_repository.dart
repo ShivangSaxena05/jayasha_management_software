@@ -1,18 +1,23 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/school_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 
-class SchoolRepository {
+class SchoolRepository extends ChangeNotifier {
+  SchoolSettings? _settings;
+  SchoolSettings? get settings => _settings;
+
   Future<SchoolSettings> getSettings() async {
-    final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/school/settings'),
-      headers: ApiConfig.headers(),
+    final response = await ApiClient.get(
+      '${ApiConfig.baseUrl}/school/settings',
     );
 
     if (response.statusCode == 200) {
-      return SchoolSettings.fromJson(json.decode(response.body));
+      _settings = SchoolSettings.fromJson(json.decode(response.body));
+      notifyListeners();
+      return _settings!;
     } else {
       throw Exception('Failed to load school settings');
     }
@@ -22,17 +27,18 @@ class SchoolRepository {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
 
-    final response = await http.put(
-      Uri.parse('${ApiConfig.baseUrl}/school/settings'),
+    final response = await ApiClient.put(
+      '${ApiConfig.baseUrl}/school/settings',
+      settings.toJson(),
       headers: {
-        ...ApiConfig.headers(),
         'Authorization': 'Bearer $token',
       },
-      body: json.encode(settings.toJson()),
     );
 
     if (response.statusCode == 200) {
-      return SchoolSettings.fromJson(json.decode(response.body));
+      _settings = SchoolSettings.fromJson(json.decode(response.body));
+      notifyListeners();
+      return _settings!;
     } else {
       final error = json.decode(response.body);
       throw Exception(error['message'] ?? 'Failed to update school settings');

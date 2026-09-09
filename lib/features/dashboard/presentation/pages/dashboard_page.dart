@@ -268,28 +268,40 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final recentAdmissions = stats['recentStudents'] as List? ?? [];
 
-    return RefreshIndicator(
-      onRefresh: _loadOnboardingData,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(30),
-        child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Welcome back, ${_principal?.name ?? "Administrator"}',
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Here\'s what\'s happening in the academy today.',
-            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 32),
+    return Consumer<SchoolRepository>(
+      builder: (context, schoolRepo, child) {
+        return RefreshIndicator(
+          onRefresh: () async {
+            await _loadOnboardingData();
+            await schoolRepo.getSettings();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome back, ${_principal?.name ?? "Administrator"}',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (schoolRepo.settings != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    schoolRepo.settings!.schoolName,
+                    style: const TextStyle(fontSize: 14, color: AppColors.primary, fontWeight: FontWeight.w600),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                const Text(
+                  'Here\'s what\'s happening in the academy today.',
+                  style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 32),
           // Search Bar Section
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -601,7 +613,8 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           );
         },
-      ),
+      );
+    },
     );
   }
 

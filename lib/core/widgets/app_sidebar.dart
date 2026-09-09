@@ -4,6 +4,8 @@ import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/features/auth/presentation/pages/login_page.dart';
 import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onboarding_repository.dart';
 
+import 'package:jayasha_childrens_academy/core/repositories/school_repository.dart';
+
 class AppSidebar extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
@@ -23,64 +25,61 @@ class _AppSidebarState extends State<AppSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isExpanded = true),
-      onExit: (_) => setState(() => _isExpanded = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        width: _isExpanded ? 220 : 70,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 15,
-              offset: const Offset(2, 0),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            // Logo/Header area
-            InkWell(
-              mouseCursor: SystemMouseCursors.click,
-              onTap: () => widget.onItemSelected(0),
-              child: Container(
-                height: 70,
-                width: double.infinity,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 70,
-                      child: Center(
-                        child: Image.asset(
-                          'assets/images/JCB_Logo.png',
-                          height: 40,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Icon(Icons.school, color: AppColors.primary, size: 35),
-                        ),
-                      ),
-                    ),
-                    if (_isExpanded)
-                      const Expanded(
-                        child: Text(
-                          "Jayasha Children's Academy",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
+    return Consumer<SchoolRepository>(
+      builder: (context, schoolRepo, child) {
+        return MouseRegion(
+          onEnter: (_) => setState(() => _isExpanded = true),
+          onExit: (_) => setState(() => _isExpanded = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            width: _isExpanded ? 220 : 70,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 15,
+                  offset: const Offset(2, 0),
                 ),
-              ),
+              ],
             ),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                // Logo/Header area
+                InkWell(
+                  mouseCursor: SystemMouseCursors.click,
+                  onTap: () => widget.onItemSelected(0),
+                  child: Container(
+                    height: 70,
+                    width: double.infinity,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 70,
+                          child: Center(
+                            child: Icon(Icons.school, color: AppColors.primary, size: 35),
+                          ),
+                        ),
+                        if (_isExpanded)
+                          Expanded(
+                            child: Text(
+                              schoolRepo.settings?.schoolName ?? "School Management",
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
             const Divider(indent: 10, endIndent: 10),
             Expanded(
               child: SingleChildScrollView(
@@ -186,8 +185,8 @@ class _AppSidebarState extends State<AppSidebar> {
                 ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

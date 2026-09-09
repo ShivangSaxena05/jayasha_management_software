@@ -68,6 +68,9 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
       await repo.updateSettings(updatedSettings);
 
       if (mounted) {
+        setState(() {
+          _isEditing = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Settings updated successfully'), backgroundColor: Colors.green),
         );
@@ -82,6 +85,8 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+
+  bool _isEditing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -105,22 +110,44 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'School Settings',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Update your school branding and contact information.',
-                    style: TextStyle(color: AppColors.textSecondary),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'School Settings',
+                            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Update your school branding and contact information.',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                      if (!_isEditing)
+                        ElevatedButton.icon(
+                          onPressed: () => setState(() => _isEditing = true),
+                          icon: const Icon(Icons.edit, size: 18),
+                          label: const Text('Edit Settings'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 32),
 
                   _buildSection(
                     'Basic Information',
                     [
-                      _buildTextField('School Name', _nameController, isRequired: true),
-                      _buildTextField('Full Address', _addressController, isRequired: true, maxLines: 2),
+                      _buildTextField('School Name', _nameController, isRequired: true, enabled: _isEditing),
+                      _buildTextField('Full Address', _addressController, isRequired: true, maxLines: 2, enabled: _isEditing),
                     ],
                   ),
 
@@ -131,12 +158,12 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
                     [
                       Row(
                         children: [
-                          Expanded(child: _buildTextField('Phone Number', _phoneController)),
+                          Expanded(child: _buildTextField('Phone Number', _phoneController, enabled: _isEditing)),
                           const SizedBox(width: 16),
-                          Expanded(child: _buildTextField('Email Address', _emailController)),
+                          Expanded(child: _buildTextField('Email Address', _emailController, enabled: _isEditing)),
                         ],
                       ),
-                      _buildTextField('Website URL', _websiteController),
+                      _buildTextField('Website URL', _websiteController, enabled: _isEditing),
                     ],
                   ),
 
@@ -147,31 +174,46 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
                     [
                       Row(
                         children: [
-                          Expanded(child: _buildTextField('Affiliation Number', _affiliationController)),
+                          Expanded(child: _buildTextField('Affiliation Number', _affiliationController, enabled: _isEditing)),
                           const SizedBox(width: 16),
-                          Expanded(child: _buildTextField('School Code', _codeController)),
+                          Expanded(child: _buildTextField('School Code', _codeController, enabled: _isEditing)),
                         ],
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 40),
-
-                  SizedBox(
-                    width: 200,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: _isSaving
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  if (_isEditing) ...[
+                    const SizedBox(height: 40),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 200,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: _isSaving ? null : _save,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: _isSaving
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isEditing = false;
+                              _loadSettings(); // Reset to current data
+                            });
+                          },
+                          child: const Text('Cancel'),
+                        ),
+                      ],
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -200,7 +242,7 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {bool isRequired = false, int maxLines = 1}) {
+  Widget _buildTextField(String label, TextEditingController controller, {bool isRequired = false, int maxLines = 1, bool enabled = true}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -211,9 +253,10 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
           TextFormField(
             controller: controller,
             maxLines: maxLines,
+            enabled: enabled,
             decoration: InputDecoration(
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: enabled ? AppColors.background : Colors.grey[200],
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),

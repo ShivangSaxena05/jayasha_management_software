@@ -8,7 +8,10 @@ const getSettings = async (req, res) => {
     let settings = await SchoolSettings.findOne();
     if (!settings) {
       // Create default settings if none exist
-      settings = await SchoolSettings.create({});
+      settings = await SchoolSettings.create({
+        schoolName: "School Name",
+        address: "School Address"
+      });
     }
     res.json(settings);
   } catch (error) {
