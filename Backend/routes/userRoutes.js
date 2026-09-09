@@ -6,7 +6,6 @@ const {
   loginWithPin,
   getProfile,
   updateProfile,
-  resetSetup,
 } = require('../controllers/userController');
 
 const { protect } = require('../middlewares/authMiddleware');
@@ -17,6 +16,5 @@ router.post('/pin-login', loginWithPin);
 router.route('/profile')
   .get(protect, getProfile)
   .put(protect, updateProfile);
-router.post('/reset-setup', resetSetup);
 
 module.exports = router;

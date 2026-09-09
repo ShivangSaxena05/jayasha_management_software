@@ -14,33 +14,6 @@ const LeaveRecord = require('../models/LeaveRecord');
 const SalaryRecord = require('../models/SalaryRecord');
 const generateToken = require('../utils/generateToken');
 
-// @desc    Reset all data (Dev only)
-// @route   POST /api/users/reset-setup
-// @access  Public
-const resetSetup = async (req, res) => {
-  try {
-    // Clear all collections
-    await Promise.all([
-      User.deleteMany({}),
-      Principal.deleteMany({}),
-      Teacher.deleteMany({}),
-      AcademicSession.deleteMany({}),
-      Class.deleteMany({}),
-      Student.deleteMany({}),
-      FeePayment.deleteMany({}),
-      FeeStructure.deleteMany({}),
-      Exam.deleteMany({}),
-      Mark.deleteMany({}),
-      Certificate.deleteMany({}),
-      LeaveRecord.deleteMany({}),
-      SalaryRecord.deleteMany({}),
-    ]);
-    res.json({ message: 'All data cleared successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message || 'Server Error' });
-  }
-};
-
 // @desc    Check if the school has been set up (any user exists)
 // @route   GET /api/users/check-setup
 // @access  Public
@@ -205,5 +178,4 @@ module.exports = {
   loginWithPin,
   getProfile,
   updateProfile,
-  resetSetup,
 };
