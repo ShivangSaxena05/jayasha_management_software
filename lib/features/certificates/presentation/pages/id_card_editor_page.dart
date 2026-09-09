@@ -1,11 +1,16 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:jayasha_childrens_academy/core/network/api_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
+import 'package:jayasha_childrens_academy/features/settings/data/repositories/school_repository.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
-import 'package:jayasha_childrens_academy/core/repositories/school_repository.dart';
-import 'package:jayasha_childrens_academy/core/models/school_settings.dart';
 
 class IdCardEditorPage extends StatefulWidget {
   final StudentAdmission student;
@@ -28,32 +33,40 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     'bold': false, 'italic': false, 'underline': false, 'color': 0xFF666666, 'fontSize': 10.0, 'enabled': true, 'align': 'center',
   };
 
-  static const List<double> _fontSizeOptions = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24];
+  static const List<double> _fontSizeOptions = [7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24];
   bool _isSaving = false;
+
+  // Card specific overrides & layout
+  String? _cardPhotoOverride;
+  double _photoBoxSize = 70.0;
+  double _rowSpacing = 3.0;
+  Map<String, dynamic> _detailsBlockStyle = {
+    'fontSize': 10.0,
+    'labelFontSize': 7.0,
+    'bold': false,
+    'color': 0xFF000000,
+  };
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeData();
+    });
   }
 
-  Future<void> _loadInitialData() async {
-    // 1. First load from certificate if editing
-    if (widget.certificateData != null) {
-      _loadCertificateData();
-    } else {
-      // 2. Otherwise load default from school settings
-      try {
-        final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
-        final settings = await schoolRepo.getSettings();
-        setState(() {
-          _schoolName = settings.schoolName;
-          _schoolAddress = settings.address;
-        });
-      } catch (e) {
-        debugPrint('Error loading school settings: $e');
+  void _initializeData() {
+    final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
+    final school = schoolRepo.schoolDetails;
+
+    setState(() {
+      if (widget.certificateData != null) {
+        _loadCertificateData();
+      } else if (school != null) {
+        _schoolName = school.schoolName;
+        _schoolAddress = school.address;
       }
-    }
+    });
   }
 
   void _loadCertificateData() {
@@ -62,6 +75,11 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     _schoolAddress = details['schoolAddress'] ?? '';
     _schoolNameStyle = _mergeStyle(_schoolNameStyle, details['schoolNameStyle']);
     _addressStyle = _mergeStyle(_addressStyle, details['addressStyle']);
+
+    _cardPhotoOverride = details['cardPhotoOverride'];
+    _photoBoxSize = (details['photoBoxSize'] ?? 70.0).toDouble();
+    _rowSpacing = (details['rowSpacing'] ?? 3.0).toDouble();
+    _detailsBlockStyle = _mergeStyle(_detailsBlockStyle, details['detailsBlockStyle']);
   }
 
   Map<String, dynamic> _mergeStyle(Map<String, dynamic> defaults, dynamic saved) {
@@ -83,6 +101,10 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
       'rollNumber': widget.student.rollNumber ?? 'Not Assigned',
       'photoPath': widget.student.photoPath,
       'issueDate': widget.certificateData?['issueDate'] ?? DateTime.now().toIso8601String(),
+      'cardPhotoOverride': _cardPhotoOverride,
+      'photoBoxSize': _photoBoxSize,
+      'rowSpacing': _rowSpacing,
+      'detailsBlockStyle': _detailsBlockStyle,
     };
   }
 
@@ -122,10 +144,62 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
   }
 
   void _printCard() {
+    final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
     PdfGenerator.printIdCard(
       student: widget.student,
       details: _buildDetailsPayload(),
+      schoolDetails: schoolRepo.schoolDetails,
     );
+  }
+
+  Future<void> _pickAndUploadCardPhoto() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image == null) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${ApiConfig.baseUrl}/upload/photo'),
+      );
+
+      request.headers.addAll({
+        'Authorization': 'Bearer $token',
+      });
+
+      request.files.add(
+        await http.MultipartFile.fromPath('photo', image.path),
+      );
+
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _cardPhotoOverride = data['url'];
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Card photo updated locally for this card'), backgroundColor: Colors.green),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to upload photo'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -171,6 +245,12 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
                       removable: true, showAlign: true,
                     ),
                     const Divider(height: 48),
+                    _buildSectionHeader('Layout & Photo'),
+                    const SizedBox(height: 16),
+                    _buildPhotoControls(),
+                    const SizedBox(height: 24),
+                    _buildLayoutControls(),
+                    const Divider(height: 48),
                     _buildSectionHeader('Student Details (Read-only)'),
                     const SizedBox(height: 16),
                     _buildReadOnlyField('Student Name', widget.student.name),
@@ -198,17 +278,19 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
               color: Colors.grey.shade200,
               child: Center(
                 child: SingleChildScrollView(
-                  child: Container(
-                    width: 340,
-                    height: 214,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: _buildLivePreview(),
+                  child: AspectRatio(
+                    aspectRatio: 85.6 / 53.98, // CR80 standard
+                    child: Container(
+                      margin: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _buildLivePreview(),
+                      ),
                     ),
                   ),
                 ),
@@ -367,6 +449,72 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     );
   }
 
+  Widget _buildPhotoControls() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Student Photo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            ElevatedButton.icon(
+              onPressed: _pickAndUploadCardPhoto,
+              icon: const Icon(Icons.photo_camera, size: 18),
+              label: const Text('Replace for this Card'),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            ),
+            if (_cardPhotoOverride != null) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => setState(() => _cardPhotoOverride = null),
+                child: const Text('Reset to Profile', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 16),
+        const Text('Photo Size', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        Slider(
+          value: _photoBoxSize,
+          min: 50,
+          max: 100,
+          onChanged: (val) => setState(() => _photoBoxSize = val),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLayoutControls() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Details Block Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        _buildStyleControls('Details', _detailsBlockStyle, (s) => setState(() => _detailsBlockStyle = s)),
+        const SizedBox(height: 16),
+        const Text('Label Font Size', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        DropdownButton<double>(
+          value: _nearestFontSize((_detailsBlockStyle['labelFontSize'] ?? 7.0).toDouble()),
+          isDense: true,
+          items: _fontSizeOptions.map((s) => DropdownMenuItem(value: s, child: Text('${s.toInt()}px'))).toList(),
+          onChanged: (val) {
+            if (val != null) _updateStyle(_detailsBlockStyle, 'labelFontSize', val, (s) => setState(() => _detailsBlockStyle = s));
+          },
+        ),
+        const SizedBox(height: 16),
+        const Text('Row Spacing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        Slider(
+          value: _rowSpacing,
+          min: 0,
+          max: 10,
+          divisions: 10,
+          label: _rowSpacing.toStringAsFixed(1),
+          onChanged: (val) => setState(() => _rowSpacing = val),
+        ),
+      ],
+    );
+  }
+
   Widget _buildLivePreview() {
     final bool showAddress = (_addressStyle['enabled'] ?? true) as bool;
     final Color headerColor = Color(_schoolNameStyle['color'] ?? 0xFF0D47A1).withOpacity(0.1);
@@ -379,9 +527,15 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
           color: headerColor,
           child: Column(
             children: [
-              Text(_schoolName, style: _getPreviewStyle(_schoolNameStyle), textAlign: _getAlign(_schoolNameStyle['align'])),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(_schoolName, style: _getPreviewStyle(_schoolNameStyle), textAlign: _getAlign(_schoolNameStyle['align'])),
+              ),
               if (showAddress)
-                Text(_schoolAddress, style: _getPreviewStyle(_addressStyle), textAlign: _getAlign(_addressStyle['align'])),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(_schoolAddress, style: _getPreviewStyle(_addressStyle), textAlign: _getAlign(_addressStyle['align'])),
+                ),
             ],
           ),
         ),
@@ -392,27 +546,45 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
             child: Row(
               children: [
                 // Photo
-                Container(
-                  width: 80,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(4),
+                GestureDetector(
+                  onTap: _pickAndUploadCardPhoto,
+                  child: Container(
+                    width: _photoBoxSize,
+                    height: _photoBoxSize * 1.28, // Maintain aspect ratio roughly 70:90
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: (_cardPhotoOverride != null || (widget.student.photoPath != null && widget.student.photoPath!.isNotEmpty))
+                              ? Image.network(
+                                  _cardPhotoOverride ?? widget.student.photoPath!,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                  },
+                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 40, color: Colors.grey),
+                                )
+                              : const Icon(Icons.person, size: 40, color: Colors.grey),
+                        ),
+                        Positioned(
+                          right: 2,
+                          bottom: 2,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                            child: const Icon(Icons.edit, size: 10, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: widget.student.photoPath != null
-                      ? Image.network(
-                          widget.student.photoPath!,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                          },
-                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 50, color: Colors.grey),
-                        )
-                      : const Icon(Icons.person, size: 50, color: Colors.grey),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 // Data
                 Expanded(
                   child: Column(
@@ -420,11 +592,11 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _cardDataRow('Name', widget.student.name, isBold: true),
-                      const SizedBox(height: 4),
+                      SizedBox(height: _rowSpacing),
                       _cardDataRow('Class', '${widget.student.className ?? 'N/A'} - ${widget.student.section ?? 'N/A'}'),
-                      const SizedBox(height: 4),
+                      SizedBox(height: _rowSpacing),
                       _cardDataRow('Roll No', widget.student.rollNumber ?? 'Not Assigned'),
-                      const SizedBox(height: 4),
+                      SizedBox(height: _rowSpacing),
                       _cardDataRow('Adm No', widget.student.admissionNumber),
                     ],
                   ),
@@ -438,11 +610,26 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
   }
 
   Widget _cardDataRow(String label, String value, {bool isBold = false}) {
+    final double labelSize = (_detailsBlockStyle['labelFontSize'] ?? 7.0).toDouble();
+    final double valueSize = (_detailsBlockStyle['fontSize'] ?? 10.0).toDouble();
+    final bool blockBold = _detailsBlockStyle['bold'] == true;
+    final Color textColor = Color(_detailsBlockStyle['color'] ?? 0xFF000000);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(), style: const TextStyle(fontSize: 8, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-        Text(value, style: TextStyle(fontSize: 11, fontWeight: isBold ? FontWeight.bold : FontWeight.w500, color: AppColors.textPrimary)),
+        Text(label.toUpperCase(), style: TextStyle(fontSize: labelSize, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: valueSize,
+              fontWeight: (isBold || blockBold) ? FontWeight.bold : FontWeight.w500,
+              color: textColor,
+            ),
+          ),
+        ),
       ],
     );
   }

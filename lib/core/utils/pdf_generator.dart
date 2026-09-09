@@ -8,16 +8,41 @@ import 'package:file_picker/file_picker.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/core/models/fee_payment.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
+import 'package:jayasha_childrens_academy/core/models/school_details.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/models/school_class.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 
 class PdfGenerator {
   static Future<pw.Document> _buildCertificatePdf({
     required StudentAdmission student,
     required String type,
     required Map<String, dynamic> details,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = pw.Document();
+
+    pw.ImageProvider? logoImage;
+    if (details['showWatermark'] ?? true) {
+      if (schoolDetails != null && schoolDetails.logoUrl.isNotEmpty) {
+        try {
+          logoImage = await networkImage(schoolDetails.logoUrl);
+        } catch (e) {
+          debugPrint('Error loading school logo from URL: $e');
+        }
+      }
+
+      if (logoImage == null) {
+        try {
+          logoImage = pw.MemoryImage(
+              (await rootBundle.load('assets/images/JCB_Logo.png'))
+                  .buffer
+                  .asUint8List());
+        } catch (e) {
+          debugPrint('Fallback logo not found: $e');
+        }
+      }
+    }
 
     PdfColor getColor(dynamic color) {
       if (color == null) return PdfColors.black;
@@ -37,9 +62,13 @@ class PdfGenerator {
       if (style == null) return pw.TextStyle(fontSize: fontSize);
       return pw.TextStyle(
         fontSize: (style['fontSize'] ?? fontSize).toDouble(),
-        fontWeight: style['bold'] == true ? pw.FontWeight.bold : pw.FontWeight.normal,
-        fontStyle: style['italic'] == true ? pw.FontStyle.italic : pw.FontStyle.normal,
-        decoration: style['underline'] == true ? pw.TextDecoration.underline : pw.TextDecoration.none,
+        fontWeight:
+            style['bold'] == true ? pw.FontWeight.bold : pw.FontWeight.normal,
+        fontStyle:
+            style['italic'] == true ? pw.FontStyle.italic : pw.FontStyle.normal,
+        decoration: style['underline'] == true
+            ? pw.TextDecoration.underline
+            : pw.TextDecoration.none,
         color: getColor(style['color']),
       );
     }
@@ -72,10 +101,8 @@ class PdfGenerator {
       }
     }
 
-    final logoImage = (details['showWatermark'] ?? true)
-        ? pw.MemoryImage((await rootBundle.load('assets/images/JCB_Logo.png')).buffer.asUint8List())
-        : null;
-    final double watermarkOpacity = (details['watermarkOpacity'] ?? 0.3).toDouble();
+    final double watermarkOpacity =
+        (details['watermarkOpacity'] ?? 0.3).toDouble();
 
     pdf.addPage(
       pw.Page(
@@ -87,7 +114,7 @@ class PdfGenerator {
                 pw.Center(
                   child: pw.Opacity(
                     opacity: watermarkOpacity,
-                    child: pw.Image(logoImage, width: 400),
+                    child: pw.Image(logoImage!, width: 400),
                   ),
                 ),
               pw.Container(
@@ -99,14 +126,18 @@ class PdfGenerator {
                   crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
                     pw.Text(
-                      details['schoolName'] ?? 'JAYASHA CHILDREN\'S ACADEMY',
+                      details['schoolName'] ??
+                          schoolDetails?.schoolName ??
+                          'JAYASHA CHILDREN\'S ACADEMY',
                       style: getStyle(details['schoolNameStyle'], fontSize: 26),
                       textAlign: getAlign(details['schoolNameStyle']?['align']),
                     ),
                     pw.SizedBox(height: 5),
                     if (details['subtitleStyle']?['enabled'] ?? true)
                       pw.Text(
-                        details['subtitle'] ?? 'Affiliated to CBSE, New Delhi',
+                        details['subtitle'] ??
+                            schoolDetails?.affiliationLine ??
+                            'Affiliated to CBSE, New Delhi',
                         style: getStyle(details['subtitleStyle'], fontSize: 14),
                         textAlign: getAlign(details['subtitleStyle']?['align']),
                       ),
@@ -121,7 +152,8 @@ class PdfGenerator {
                     pw.SizedBox(height: 60),
                     pw.Paragraph(
                       text: details['body'] ?? '',
-                      style: getStyle(details['bodyStyle'], fontSize: 16).copyWith(lineSpacing: 5),
+                      style: getStyle(details['bodyStyle'], fontSize: 16)
+                          .copyWith(lineSpacing: 5),
                       textAlign: getAlign(details['bodyStyle']?['align']),
                     ),
                     pw.Spacer(),
@@ -131,33 +163,44 @@ class PdfGenerator {
                       children: [
                         pw.Expanded(
                           child: pw.Column(
-                            crossAxisAlignment: getCrossAlign(details['dateStyle']?['align'] ?? details['placeStyle']?['align']),
+                            crossAxisAlignment: getCrossAlign(
+                                details['dateStyle']?['align'] ??
+                                    details['placeStyle']?['align']),
                             children: [
                               if (details['dateStyle']?['enabled'] ?? true)
                                 pw.Text(
                                   'Date: ${details['issueDate'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(details['issueDate'])) : DateFormat('dd/MM/yyyy').format(DateTime.now())}',
-                                  style: getStyle(details['dateStyle'] ?? {'color': 0xFF000000}),
-                                  textAlign: getAlign(details['dateStyle']?['align']),
+                                  style: getStyle(
+                                      details['dateStyle'] ?? {'color': 0xFF000000}),
+                                  textAlign:
+                                      getAlign(details['dateStyle']?['align']),
                                 ),
                               if (details['placeStyle']?['enabled'] ?? true)
                                 pw.Text(
                                   'Place: ${details['place'] ?? 'School Office'}',
                                   style: getStyle(details['placeStyle']),
-                                  textAlign: getAlign(details['placeStyle']?['align']),
+                                  textAlign:
+                                      getAlign(details['placeStyle']?['align']),
                                 ),
                             ],
                           ),
                         ),
                         pw.Expanded(
                           child: pw.Column(
-                            crossAxisAlignment: getCrossAlign(details['principalLabelStyle']?['align']),
+                            crossAxisAlignment: getCrossAlign(
+                                details['principalLabelStyle']?['align']),
                             children: [
                               pw.SizedBox(height: 40),
-                              if (details['principalLabelStyle']?['enabled'] ?? true)
+                              if (details['principalLabelStyle']?['enabled'] ??
+                                  true)
                                 pw.Text(
-                                  details['principalLabel'] ?? 'Principal Signature',
-                                  style: getStyle(details['principalLabelStyle']),
-                                  textAlign: getAlign(details['principalLabelStyle']?['align']),
+                                  details['principalLabel'] ??
+                                      schoolDetails?.principalSignatureLabel ??
+                                      'Principal Signature',
+                                  style:
+                                      getStyle(details['principalLabelStyle']),
+                                  textAlign: getAlign(
+                                      details['principalLabelStyle']?['align']),
                                 ),
                             ],
                           ),
@@ -179,14 +222,30 @@ class PdfGenerator {
     required StudentAdmission student,
     required String type,
     required Map<String, dynamic> details,
+    SchoolDetails? schoolDetails,
   }) async {
-    final pdf = await _buildCertificatePdf(student: student, type: type, details: details);
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+    final pdf = await _buildCertificatePdf(
+        student: student,
+        type: type,
+        details: details,
+        schoolDetails: schoolDetails);
+    await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save());
+  }
+
+  static pw.Widget _networkIcon(int codePoint, {double size = 30, PdfColor color = PdfColors.grey500}) {
+    // Basic fallback for icons in PDF
+    return pw.Container(
+      width: size,
+      height: size,
+      decoration: const pw.BoxDecoration(color: PdfColors.grey300, shape: pw.BoxShape.circle),
+    );
   }
 
   static Future<void> printIdCard({
     required StudentAdmission student,
     required Map<String, dynamic> details,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = pw.Document();
 
@@ -194,19 +253,29 @@ class PdfGenerator {
     const double cardWidth = 85.6 * PdfPageFormat.mm;
     const double cardHeight = 54.0 * PdfPageFormat.mm;
 
+    final photoPath = details['cardPhotoOverride'] ?? student.photoPath;
     pw.ImageProvider? studentPhoto;
-    if (student.photoPath != null) {
+    if (photoPath != null && photoPath.isNotEmpty) {
       try {
-        studentPhoto = await networkImage(student.photoPath!);
+        studentPhoto = await networkImage(photoPath);
       } catch (e) {
         debugPrint('Error loading student photo for PDF: $e');
       }
     }
 
-    // Simple color selection for PDF header
-    final pdfHeaderColor = details['schoolNameStyle']?['color'] != null
-        ? PdfColor.fromInt(details['schoolNameStyle']['color'])
-        : PdfColors.blue50;
+    final double photoBoxSize = (details['photoBoxSize'] ?? 70.0).toDouble();
+    final double rowSpacing = (details['rowSpacing'] ?? 3.0).toDouble();
+    final Map<String, dynamic>? blockStyle = details['detailsBlockStyle'];
+
+    // Simple color selection for PDF header - matching preview opacity (10%)
+    PdfColor pdfHeaderColor = PdfColors.blue50;
+    if (details['schoolNameStyle']?['color'] != null) {
+      final int colorInt = details['schoolNameStyle']['color'];
+      final r = (colorInt >> 16) & 0xFF;
+      final g = (colorInt >> 8) & 0xFF;
+      final b = colorInt & 0xFF;
+      pdfHeaderColor = PdfColor.fromInt((0x1A << 24) | (r << 16) | (g << 8) | b);
+    }
 
     pdf.addPage(
       pw.Page(
@@ -223,19 +292,26 @@ class PdfGenerator {
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                  padding:
+                      const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
                   color: pdfHeaderColor,
                   child: pw.Column(
                     children: [
                       pw.Text(
-                        details['schoolName'] ?? 'JAYASHA CHILDREN\'S ACADEMY',
-                        textAlign: _getPdfAlign(details['schoolNameStyle']?['align']),
+                        details['schoolName'] ??
+                            schoolDetails?.schoolName ??
+                            'JAYASHA CHILDREN\'S ACADEMY',
+                        textAlign:
+                            _getPdfAlign(details['schoolNameStyle']?['align']),
                         style: _getPdfStyle(details['schoolNameStyle'], 14),
                       ),
                       if (details['addressStyle']?['enabled'] ?? true)
                         pw.Text(
-                          details['schoolAddress'] ?? '',
-                          textAlign: _getPdfAlign(details['addressStyle']?['align']),
+                          details['schoolAddress'] ??
+                              schoolDetails?.address ??
+                              '',
+                          textAlign:
+                              _getPdfAlign(details['addressStyle']?['align']),
                           style: _getPdfStyle(details['addressStyle'], 8),
                         ),
                     ],
@@ -248,15 +324,17 @@ class PdfGenerator {
                     child: pw.Row(
                       children: [
                         pw.Container(
-                          width: 60,
-                          height: 75,
+                          width: photoBoxSize,
+                          height: photoBoxSize * 1.28,
                           decoration: pw.BoxDecoration(
                             color: PdfColors.grey200,
-                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+                            borderRadius:
+                                const pw.BorderRadius.all(pw.Radius.circular(2)),
                           ),
                           child: studentPhoto != null
                               ? pw.Image(studentPhoto, fit: pw.BoxFit.cover)
-                              : pw.Center(child: pw.PdfLogo()), // Placeholder
+                              : pw.Center(
+                                  child: _networkIcon(0xe7fd, size: photoBoxSize * 0.5, color: PdfColors.grey500)),
                         ),
                         pw.SizedBox(width: 12),
                         pw.Expanded(
@@ -264,13 +342,19 @@ class PdfGenerator {
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             mainAxisAlignment: pw.MainAxisAlignment.center,
                             children: [
-                              _pdfCardDataRow('Name', student.name, isBold: true),
-                              pw.SizedBox(height: 3),
-                              _pdfCardDataRow('Class', '${student.className ?? 'N/A'} - ${student.section ?? 'N/A'}'),
-                              pw.SizedBox(height: 3),
-                              _pdfCardDataRow('Roll No', student.rollNumber ?? 'Not Assigned'),
-                              pw.SizedBox(height: 3),
-                              _pdfCardDataRow('Adm No', student.admissionNumber),
+                              _pdfCardDataRow('Name', student.name,
+                                  isBold: true, blockStyle: blockStyle),
+                              pw.SizedBox(height: rowSpacing),
+                              _pdfCardDataRow('Class',
+                                  '${student.className ?? 'N/A'} - ${student.section ?? 'N/A'}',
+                                  blockStyle: blockStyle),
+                              pw.SizedBox(height: rowSpacing),
+                              _pdfCardDataRow(
+                                  'Roll No', student.rollNumber ?? 'Not Assigned',
+                                  blockStyle: blockStyle),
+                              pw.SizedBox(height: rowSpacing),
+                              _pdfCardDataRow('Adm No', student.admissionNumber,
+                                  blockStyle: blockStyle),
                             ],
                           ),
                         ),
@@ -285,34 +369,65 @@ class PdfGenerator {
       ),
     );
 
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+    await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save());
   }
 
-  static pw.TextStyle _getPdfStyle(Map<String, dynamic>? style, double defaultSize) {
+  static pw.TextStyle _getPdfStyle(
+      Map<String, dynamic>? style, double defaultSize) {
     if (style == null) return pw.TextStyle(fontSize: defaultSize);
     return pw.TextStyle(
       fontSize: (style['fontSize'] ?? defaultSize).toDouble(),
-      fontWeight: style['bold'] == true ? pw.FontWeight.bold : pw.FontWeight.normal,
-      fontStyle: style['italic'] == true ? pw.FontStyle.italic : pw.FontStyle.normal,
-      decoration: style['underline'] == true ? pw.TextDecoration.underline : pw.TextDecoration.none,
-      color: style['color'] != null ? PdfColor.fromInt(style['color']) : PdfColors.black,
+      fontWeight:
+          style['bold'] == true ? pw.FontWeight.bold : pw.FontWeight.normal,
+      fontStyle:
+          style['italic'] == true ? pw.FontStyle.italic : pw.FontStyle.normal,
+      decoration: style['underline'] == true
+          ? pw.TextDecoration.underline
+          : pw.TextDecoration.none,
+      color: style['color'] != null
+          ? PdfColor.fromInt(style['color'])
+          : PdfColors.black,
     );
   }
 
   static pw.TextAlign _getPdfAlign(String? align) {
     switch (align) {
-      case 'left': return pw.TextAlign.left;
-      case 'right': return pw.TextAlign.right;
-      default: return pw.TextAlign.center;
+      case 'left':
+        return pw.TextAlign.left;
+      case 'right':
+        return pw.TextAlign.right;
+      default:
+        return pw.TextAlign.center;
     }
   }
 
-  static pw.Widget _pdfCardDataRow(String label, String value, {bool isBold = false}) {
+  static pw.Widget _pdfCardDataRow(String label, String value,
+      {bool isBold = false, Map<String, dynamic>? blockStyle}) {
+    final double labelSize = (blockStyle?['labelFontSize'] ?? 7.0).toDouble();
+    final double valueSize = (blockStyle?['fontSize'] ?? 10.0).toDouble();
+    final bool blockBold = blockStyle?['bold'] == true;
+    final PdfColor textColor = blockStyle?['color'] != null
+        ? PdfColor.fromInt(blockStyle!['color'])
+        : PdfColors.black;
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(label.toUpperCase(), style: pw.TextStyle(fontSize: 6, color: PdfColors.grey700, fontWeight: pw.FontWeight.bold)),
-        pw.Text(value, style: pw.TextStyle(fontSize: 9, fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+        pw.Text(label.toUpperCase(),
+            style: pw.TextStyle(
+                fontSize: labelSize,
+                color: PdfColors.grey700,
+                fontWeight: pw.FontWeight.bold)),
+        pw.FittedBox(
+          fit: pw.BoxFit.scaleDown,
+          child: pw.Text(value,
+              style: pw.TextStyle(
+                  fontSize: valueSize,
+                  color: textColor,
+                  fontWeight:
+                      (isBold || blockBold) ? pw.FontWeight.bold : pw.FontWeight.normal)),
+        ),
       ],
     );
   }
@@ -321,11 +436,17 @@ class PdfGenerator {
     required StudentAdmission student,
     required String type,
     required Map<String, dynamic> details,
+    SchoolDetails? schoolDetails,
   }) async {
-    final pdf = await _buildCertificatePdf(student: student, type: type, details: details);
+    final pdf = await _buildCertificatePdf(
+        student: student,
+        type: type,
+        details: details,
+        schoolDetails: schoolDetails);
     final bytes = await pdf.save();
 
-    final fileName = '${type.replaceAll(' ', '_')}_${student.admissionNumber}.pdf';
+    final fileName =
+        '${type.replaceAll(' ', '_')}_${student.admissionNumber}.pdf';
 
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       String? outputFile = await FilePicker.platform.saveFile(
@@ -351,20 +472,99 @@ class PdfGenerator {
     required StudentAdmission student,
     required String type,
     Map<String, dynamic>? details,
+    SchoolDetails? schoolDetails,
   }) async {
-    final pdf = await _buildCertificatePdf(
-      student: student,
-      type: type,
-      details: details ?? {},
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return pw.Container(
+            padding: const pw.EdgeInsets.all(40),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black, width: 2),
+            ),
+            child: pw.Column(
+              children: [
+                pw.Text(
+                  schoolDetails?.schoolName ?? 'JAYASHA CHILDREN\'S ACADEMY',
+                  style: pw.TextStyle(
+                    fontSize: 26,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue900,
+                  ),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                    schoolDetails?.affiliationLine ??
+                        'Affiliated to CBSE, New Delhi',
+                    style: const pw.TextStyle(fontSize: 14)),
+                pw.SizedBox(height: 10),
+                pw.Divider(thickness: 1),
+                pw.SizedBox(height: 40),
+                pw.Text(
+                  type.toUpperCase(),
+                  style: pw.TextStyle(
+                    fontSize: 20,
+                    fontWeight: pw.FontWeight.bold,
+                    decoration: pw.TextDecoration.underline,
+                  ),
+                ),
+                pw.SizedBox(height: 60),
+                pw.Paragraph(
+                  text:
+                      'This is to certify that Master/Miss ${student.name}, son/daughter of Mr. ${student.fatherName}, is/was a bonafide student of this school studying in section ${student.section ?? 'N/A'} during the session ${details?['session'] ?? '2023-24'}.',
+                  style: pw.TextStyle(fontSize: 16, lineSpacing: 5),
+                  textAlign: pw.TextAlign.justify,
+                ),
+                pw.SizedBox(height: 40),
+                pw.Align(
+                  alignment: pw.Alignment.centerLeft,
+                  child: pw.Text(
+                    'His/Her date of birth according to the school records is ${DateFormat('dd-MM-yyyy').format(DateTime.parse(student.dob))}.',
+                    style: const pw.TextStyle(fontSize: 16),
+                  ),
+                ),
+                pw.Spacer(),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                            'Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}'),
+                        pw.Text('Place: School Office'),
+                      ],
+                    ),
+                    pw.Column(
+                      children: [
+                        pw.SizedBox(height: 40),
+                        pw.Text(
+                            schoolDetails?.principalSignatureLabel ??
+                                'Principal Signature',
+                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+
+    await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save());
   }
 
   static Future<pw.Document> _buildFeeReceiptPdf({
     required StudentAdmission student,
     required FeePayment payment,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = pw.Document();
 
@@ -388,7 +588,8 @@ class PdfGenerator {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Text(
-                          schoolDetails['schoolName'] ?? 'School Name',
+                          schoolDetails?.schoolName ??
+                              'JAYASHA CHILDREN\'S ACADEMY',
                           style: pw.TextStyle(
                             fontSize: 24,
                             fontWeight: pw.FontWeight.bold,
@@ -396,11 +597,40 @@ class PdfGenerator {
                           ),
                         ),
                         pw.SizedBox(height: 4),
-                        if (schoolDetails['affiliation'] != null)
-                          pw.Text(schoolDetails['affiliation'], style: const pw.TextStyle(fontSize: 12)),
-                        pw.Text('Address: ${schoolDetails['address'] ?? ''}', style: const pw.TextStyle(fontSize: 10)),
-                        pw.Text('Contact: ${schoolDetails['phone'] ?? ''} | Email: ${schoolDetails['email'] ?? ''}', style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text(
+                            schoolDetails?.affiliationLine ??
+                                'Affiliated to CBSE, New Delhi',
+                            style: const pw.TextStyle(fontSize: 12)),
+                        pw.Text(
+                            'Address: ${schoolDetails?.address ?? 'Near City Center, Shivpuri, Madhya Pradesh'}',
+                            style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text(
+                            'Contact: ${schoolDetails?.phone ?? '+91 9876543210'} | Email: ${schoolDetails?.email ?? 'info@jayasha.edu.in'}',
+                            style: const pw.TextStyle(fontSize: 10)),
                       ],
+                    ),
+                    pw.Container(
+                      width: 60,
+                      height: 60,
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.blue900,
+                        shape: pw.BoxShape.circle,
+                      ),
+                      child: pw.Center(
+                        child: pw.Text(
+                            schoolDetails != null &&
+                                    schoolDetails.schoolName.length >= 3
+                                ? schoolDetails.schoolName
+                                    .split(' ')
+                                    .take(3)
+                                    .map((e) => e[0])
+                                    .join()
+                                    .toUpperCase()
+                                : 'JCA',
+                            style: pw.TextStyle(
+                                color: PdfColors.white,
+                                fontWeight: pw.FontWeight.bold)),
+                      ),
                     ),
                   ],
                 ),
@@ -409,11 +639,13 @@ class PdfGenerator {
                 pw.SizedBox(height: 10),
                 pw.Center(
                   child: pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                    padding:
+                        const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 5),
                     decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                     child: pw.Text(
                       'OFFICIAL FEE RECEIPT',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 14),
                     ),
                   ),
                 ),
@@ -423,15 +655,21 @@ class PdfGenerator {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('Receipt No: REC-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
+                    pw.Text(
+                        'Receipt No: REC-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
                         style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Date: ${DateFormat('dd MMMM yyyy').format(payment.date)}'),
+                    pw.Text(
+                        'Date: ${DateFormat('dd MMMM yyyy').format(payment.date)}'),
                   ],
                 ),
                 pw.SizedBox(height: 20),
 
                 // Student Details Section
-                pw.Text('STUDENT INFORMATION', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: PdfColors.blue900)),
+                pw.Text('STUDENT INFORMATION',
+                    style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 12,
+                        color: PdfColors.blue900)),
                 pw.Divider(thickness: 1, color: PdfColors.blue900),
                 pw.SizedBox(height: 8),
                 pw.Row(
@@ -441,9 +679,12 @@ class PdfGenerator {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           _receiptInfoRow('Student Name', student.name),
-                          _receiptInfoRow('Admission No', student.admissionNumber),
-                          _receiptInfoRow('Roll Number', student.rollNumber ?? 'N/A'),
-                          _receiptInfoRow('Class & Section', '${student.className ?? 'N/A'} - ${student.section ?? 'N/A'}'),
+                          _receiptInfoRow(
+                              'Admission No', student.admissionNumber),
+                          _receiptInfoRow(
+                              'Roll Number', student.rollNumber ?? 'N/A'),
+                          _receiptInfoRow('Class & Section',
+                              '${student.className ?? 'N/A'} - ${student.section ?? 'N/A'}'),
                         ],
                       ),
                     ),
@@ -463,7 +704,11 @@ class PdfGenerator {
                 pw.SizedBox(height: 25),
 
                 // Payment Details Table
-                pw.Text('PAYMENT DETAILS', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: PdfColors.blue900)),
+                pw.Text('PAYMENT DETAILS',
+                    style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 12,
+                        color: PdfColors.blue900)),
                 pw.Divider(thickness: 1, color: PdfColors.blue900),
                 pw.SizedBox(height: 8),
                 pw.Table(
@@ -472,16 +717,38 @@ class PdfGenerator {
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(color: PdfColors.grey100),
                       children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Description', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Payment Category', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Amount (INR)', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text('Description',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text('Payment Category',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text('Amount (INR)',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
                       ],
                     ),
                     pw.TableRow(
                       children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(payment.remarks ?? 'Fee Payment')),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(payment.category.name.toUpperCase())),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Rs. ${payment.amount.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text(payment.remarks ?? 'Fee Payment')),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text(
+                                payment.category.name.toUpperCase())),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text(
+                                'Rs. ${payment.amount.toStringAsFixed(2)}',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
                       ],
                     ),
                   ],
@@ -496,7 +763,10 @@ class PdfGenerator {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Text('Payment Mode: ${payment.mode.name.toUpperCase()}'),
-                        pw.Text('Status: SUCCESSFUL', style: pw.TextStyle(color: PdfColors.green700, fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Status: SUCCESSFUL',
+                            style: pw.TextStyle(
+                                color: PdfColors.green700,
+                                fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
                     pw.Container(
@@ -504,7 +774,8 @@ class PdfGenerator {
                       decoration: const pw.BoxDecoration(color: PdfColors.grey100),
                       child: pw.Text(
                         'TOTAL PAID: Rs. ${payment.amount.toStringAsFixed(2)}',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+                        style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold, fontSize: 16),
                       ),
                     ),
                   ],
@@ -516,20 +787,34 @@ class PdfGenerator {
                   children: [
                     pw.Column(
                       children: [
-                        pw.SizedBox(height: 40, width: 100, child: pw.Divider(thickness: 0.5)),
-                        pw.Text('Parent\'s Signature', style: const pw.TextStyle(fontSize: 10)),
+                        pw.SizedBox(
+                            height: 40,
+                            width: 100,
+                            child: pw.Divider(thickness: 0.5)),
+                        pw.Text('Parent\'s Signature',
+                            style: const pw.TextStyle(fontSize: 10)),
                       ],
                     ),
                     pw.Column(
                       children: [
-                        pw.SizedBox(height: 40, width: 100, child: pw.Divider(thickness: 0.5)),
-                        pw.Text('Accountant Signature', style: const pw.TextStyle(fontSize: 10)),
+                        pw.SizedBox(
+                            height: 40,
+                            width: 100,
+                            child: pw.Divider(thickness: 0.5)),
+                        pw.Text('Accountant Signature',
+                            style: const pw.TextStyle(fontSize: 10)),
                       ],
                     ),
                     pw.Column(
                       children: [
-                        pw.SizedBox(height: 40, width: 100, child: pw.Divider(thickness: 0.5)),
-                        pw.Text('Principal\'s Signature', style: const pw.TextStyle(fontSize: 10)),
+                        pw.SizedBox(
+                            height: 40,
+                            width: 100,
+                            child: pw.Divider(thickness: 0.5)),
+                        pw.Text(
+                            schoolDetails?.principalSignatureLabel ??
+                                'Principal\'s Signature',
+                            style: const pw.TextStyle(fontSize: 10)),
                       ],
                     ),
                   ],
@@ -538,7 +823,10 @@ class PdfGenerator {
                 pw.Center(
                   child: pw.Text(
                     'Note: This is a computer-generated receipt and does not require a physical seal.',
-                    style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic),
+                    style: pw.TextStyle(
+                        fontSize: 8,
+                        color: PdfColors.grey600,
+                        fontStyle: pw.FontStyle.italic),
                   ),
                 ),
               ],
@@ -556,7 +844,10 @@ class PdfGenerator {
       child: pw.RichText(
         text: pw.TextSpan(
           children: [
-            pw.TextSpan(text: '$label: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+            pw.TextSpan(
+                text: '$label: ',
+                style:
+                    pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
             pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 10)),
           ],
         ),
@@ -567,33 +858,33 @@ class PdfGenerator {
   static Future<void> generateFeeReceipt({
     required StudentAdmission student,
     required FeePayment payment,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = await _buildFeeReceiptPdf(
-      student: student,
-      payment: payment,
-      schoolDetails: schoolDetails,
-      sessionName: sessionName,
-    );
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+        student: student,
+        payment: payment,
+        sessionName: sessionName,
+        schoolDetails: schoolDetails);
+    await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save());
   }
 
   static Future<void> downloadFeeReceipt({
     required StudentAdmission student,
     required FeePayment payment,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = await _buildFeeReceiptPdf(
-      student: student,
-      payment: payment,
-      schoolDetails: schoolDetails,
-      sessionName: sessionName,
-    );
+        student: student,
+        payment: payment,
+        sessionName: sessionName,
+        schoolDetails: schoolDetails);
     final bytes = await pdf.save();
 
-    final fileName = 'Receipt_${student.admissionNumber}_${DateFormat('yyyyMMdd').format(payment.date)}.pdf';
+    final fileName =
+        'Receipt_${student.admissionNumber}_${DateFormat('yyyyMMdd').format(payment.date)}.pdf';
 
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       String? outputFile = await FilePicker.platform.saveFile(
@@ -617,7 +908,7 @@ class PdfGenerator {
 
   static Future<void> downloadReportCard({
     required dynamic markRecord,
-    required Map<String, dynamic> schoolDetails,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = pw.Document();
     final student = markRecord['student'];
@@ -637,8 +928,15 @@ class PdfGenerator {
                 pw.Center(
                   child: pw.Column(
                     children: [
-                      pw.Text(schoolDetails['schoolName'] ?? 'School Name', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('PROGRESS REPORT', style: pw.TextStyle(fontSize: 16, decoration: pw.TextDecoration.underline)),
+                      pw.Text(
+                          schoolDetails?.schoolName ??
+                              'JAYASHA CHILDREN\'S ACADEMY',
+                          style: pw.TextStyle(
+                              fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('PROGRESS REPORT',
+                          style: pw.TextStyle(
+                              fontSize: 16,
+                              decoration: pw.TextDecoration.underline)),
                       pw.Text(exam['name'], style: pw.TextStyle(fontSize: 14)),
                     ],
                   ),
@@ -670,18 +968,36 @@ class PdfGenerator {
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(color: PdfColors.grey300),
                       children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('Subject', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('Max Marks', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text('Marks Obtained', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(5),
+                            child: pw.Text('Subject',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(5),
+                            child: pw.Text('Max Marks',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(5),
+                            child: pw.Text('Marks Obtained',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
                       ],
                     ),
                     ...marks.map((m) => pw.TableRow(
-                      children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text(m['subject'])),
-                        pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text(m['maxMarks'].toString())),
-                        pw.Padding(padding: const pw.EdgeInsets.all(5), child: pw.Text(m['totalMarks'].toString())),
-                      ],
-                    )),
+                          children: [
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(5),
+                                child: pw.Text(m['subject'])),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(5),
+                                child: pw.Text(m['maxMarks'].toString())),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(5),
+                                child: pw.Text(m['totalMarks'].toString())),
+                          ],
+                        )),
                   ],
                 ),
                 pw.SizedBox(height: 20),
@@ -689,8 +1005,10 @@ class PdfGenerator {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text('Total Obtained: ${markRecord['totalObtained']}'),
-                    pw.Text('Percentage: ${markRecord['percentage'].toStringAsFixed(2)}%'),
-                    pw.Text('Result: ${markRecord['result']}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                        'Percentage: ${markRecord['percentage'].toStringAsFixed(2)}%'),
+                    pw.Text('Result: ${markRecord['result']}',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
                 pw.Spacer(),
@@ -698,7 +1016,7 @@ class PdfGenerator {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text('Class Teacher'),
-                    pw.Text('Principal'),
+                    pw.Text(schoolDetails?.principalSignatureLabel ?? 'Principal'),
                     pw.Text('Parent'),
                   ],
                 ),
@@ -710,7 +1028,8 @@ class PdfGenerator {
     );
 
     final bytes = await pdf.save();
-    final fileName = 'ReportCard_${student['admissionNumber']}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
+    final fileName =
+        'ReportCard_${student['admissionNumber']}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
 
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       String? outputFile = await FilePicker.platform.saveFile(
@@ -736,13 +1055,14 @@ class PdfGenerator {
     required dynamic exam,
     required List<dynamic> datesheet,
     required String className,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = pw.Document();
-    _addDatesheetPage(pdf, exam, datesheet, className, schoolDetails, sessionName);
+    _addDatesheetPage(pdf, exam, datesheet, className, sessionName, schoolDetails);
     final bytes = await pdf.save();
-    final fileName = 'Datesheet_${className.replaceAll(' ', '_')}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
+    final fileName =
+        'Datesheet_${className.replaceAll(' ', '_')}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
 
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       String? outputFile = await FilePicker.platform.saveFile(
@@ -768,14 +1088,15 @@ class PdfGenerator {
     required dynamic exam,
     required List<dynamic> fullDatesheet,
     required List<dynamic> classes,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = pw.Document();
 
     for (var cls in classes) {
       final classId = cls['_id'];
-      final classEntries = fullDatesheet.where((d) => d['classId'] == classId).toList();
+      final classEntries =
+          fullDatesheet.where((d) => d['classId'] == classId).toList();
       if (classEntries.isNotEmpty) {
         final section = cls['section'];
         final sectionSuffix = (section != null &&
@@ -783,12 +1104,19 @@ class PdfGenerator {
                 section.toString().isNotEmpty)
             ? ' - $section'
             : '';
-        _addDatesheetPage(pdf, exam, classEntries, '${cls['name']}$sectionSuffix', schoolDetails, sessionName);
+        _addDatesheetPage(
+            pdf,
+            exam,
+            classEntries,
+            '${cls['name']}$sectionSuffix',
+            sessionName,
+            schoolDetails);
       }
     }
 
     final bytes = await pdf.save();
-    final fileName = 'Full_Datesheet_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
+    final fileName =
+        'Full_Datesheet_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
 
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       String? outputFile = await FilePicker.platform.saveFile(
@@ -810,7 +1138,13 @@ class PdfGenerator {
     }
   }
 
-  static void _addDatesheetPage(pw.Document pdf, dynamic exam, List<dynamic> datesheet, String className, Map<String, dynamic> schoolDetails, String? sessionName) {
+  static void _addDatesheetPage(
+      pw.Document pdf,
+      dynamic exam,
+      List<dynamic> datesheet,
+      String className,
+      String? sessionName,
+      SchoolDetails? schoolDetails) {
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -826,7 +1160,8 @@ class PdfGenerator {
                   child: pw.Column(
                     children: [
                       pw.Text(
-                        schoolDetails['schoolName'] ?? 'School Name',
+                        schoolDetails?.schoolName ??
+                            'JAYASHA CHILDREN\'S ACADEMY',
                         style: pw.TextStyle(
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
@@ -835,13 +1170,19 @@ class PdfGenerator {
                       ),
                       pw.SizedBox(height: 5),
                       pw.Text('EXAMINATION DATESHEET',
-                          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline)),
+                          style: pw.TextStyle(
+                              fontSize: 18,
+                              fontWeight: pw.FontWeight.bold,
+                              decoration: pw.TextDecoration.underline)),
                       pw.SizedBox(height: 10),
                       pw.Text(exam['name'], style: pw.TextStyle(fontSize: 16)),
                       if (sessionName != null)
-                        pw.Text('Academic Session: $sessionName', style: const pw.TextStyle(fontSize: 12)),
+                        pw.Text('Academic Session: $sessionName',
+                            style: const pw.TextStyle(fontSize: 12)),
                       pw.SizedBox(height: 5),
-                      pw.Text('Class: $className', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Class: $className',
+                          style: pw.TextStyle(
+                              fontSize: 14, fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -859,22 +1200,56 @@ class PdfGenerator {
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(color: PdfColors.grey300),
                       children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Subject', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Date', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Start Time', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Duration', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Max Marks', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text('Subject',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text('Date',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text('Start Time',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text('Duration',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(
+                            padding: const pw.EdgeInsets.all(8),
+                            child: pw.Text('Max Marks',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold))),
                       ],
                     ),
                     ...datesheet.map((item) => pw.TableRow(
-                      children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(item['subject'] ?? '')),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(item['date'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(item['date'])) : '-')),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(item['startTime'] ?? '-')),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('${item['durationHours']} Hr')),
-                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(item['maxMarks']?.toString() ?? '-')),
-                      ],
-                    )),
+                          children: [
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(8),
+                                child: pw.Text(item['subject'] ?? '')),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(8),
+                                child: pw.Text(item['date'] != null
+                                    ? DateFormat('dd/MM/yyyy')
+                                        .format(DateTime.parse(item['date']))
+                                    : '-')),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(8),
+                                child: pw.Text(item['startTime'] ?? '-')),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(8),
+                                child: pw.Text('${item['durationHours']} Hr')),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(8),
+                                child: pw.Text(
+                                    item['maxMarks']?.toString() ?? '-')),
+                          ],
+                        )),
                   ],
                 ),
                 pw.Spacer(),
@@ -890,7 +1265,10 @@ class PdfGenerator {
                     pw.Column(
                       children: [
                         pw.SizedBox(height: 40),
-                        pw.Text('Principal'),
+                        pw.Text(
+                            schoolDetails?.principalSignatureLabel ??
+                                'Principal',
+                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
                   ],
@@ -905,8 +1283,8 @@ class PdfGenerator {
 
   static Future<pw.Document> _buildClassTimetablePdf({
     required SchoolClass schoolClass,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = pw.Document();
     final shortDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -914,7 +1292,8 @@ class PdfGenerator {
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.only(left: 40, top: 32, bottom: 32, right: 40),
+        margin:
+            const pw.EdgeInsets.only(left: 40, top: 32, bottom: 32, right: 40),
         build: (pw.Context context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -926,7 +1305,8 @@ class PdfGenerator {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        schoolDetails['schoolName'] ?? 'School Name',
+                        schoolDetails?.schoolName ??
+                            'JAYASHA CHILDREN\'S ACADEMY',
                         style: pw.TextStyle(
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
@@ -934,15 +1314,18 @@ class PdfGenerator {
                         ),
                       ),
                       pw.Text('Weekly Timetable: ${schoolClass.name}',
-                          style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                          style: pw.TextStyle(
+                              fontSize: 16, fontWeight: pw.FontWeight.bold)),
                       if (sessionName != null)
-                        pw.Text('Academic Session: $sessionName', style: const pw.TextStyle(fontSize: 12)),
+                        pw.Text('Academic Session: $sessionName',
+                            style: const pw.TextStyle(fontSize: 12)),
                     ],
                   ),
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      pw.Text('Generated on: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+                      pw.Text(
+                          'Generated on: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
                           style: const pw.TextStyle(fontSize: 10)),
                     ],
                   ),
@@ -965,12 +1348,16 @@ class PdfGenerator {
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
                           child: pw.Text('Period',
-                              style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
+                              style: pw.TextStyle(
+                                  color: PdfColors.white,
+                                  fontWeight: pw.FontWeight.bold)),
                         ),
                         ...shortDays.map((day) => pw.Padding(
                               padding: const pw.EdgeInsets.all(8),
                               child: pw.Text(day,
-                                  style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
+                                  style: pw.TextStyle(
+                                      color: PdfColors.white,
+                                      fontWeight: pw.FontWeight.bold)),
                             )),
                       ],
                     ),
@@ -980,7 +1367,9 @@ class PdfGenerator {
                         children: [
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(8),
-                            child: pw.Text('Period ${pIdx + 1}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            child: pw.Text('Period ${pIdx + 1}',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           ...List.generate(6, (dIdx) {
                             final entry = schoolClass.timetable[pIdx][dIdx];
@@ -990,10 +1379,14 @@ class PdfGenerator {
                                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                                 children: [
                                   pw.Text(entry?.subject ?? '-',
-                                      style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                                      style: pw.TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: pw.FontWeight.bold)),
                                   if (entry != null && entry.subject != 'LUNCH')
                                     pw.Text(entry.teacherName,
-                                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                                        style: const pw.TextStyle(
+                                            fontSize: 8,
+                                            color: PdfColors.grey700)),
                                 ],
                               ),
                             );
@@ -1014,14 +1407,13 @@ class PdfGenerator {
 
   static Future<void> downloadClassTimetable({
     required SchoolClass schoolClass,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = await _buildClassTimetablePdf(
-      schoolClass: schoolClass,
-      schoolDetails: schoolDetails,
-      sessionName: sessionName,
-    );
+        schoolClass: schoolClass,
+        sessionName: sessionName,
+        schoolDetails: schoolDetails);
     final bytes = await pdf.save();
     final fileName = 'Timetable_${schoolClass.name.replaceAll(' ', '_')}.pdf';
 
@@ -1047,8 +1439,8 @@ class PdfGenerator {
 
   static Future<pw.Document> _buildTeacherTimetablePdf({
     required Teacher teacher,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = pw.Document();
     final shortDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1076,7 +1468,8 @@ class PdfGenerator {
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.only(left: 40, top: 32, bottom: 32, right: 40),
+        margin:
+            const pw.EdgeInsets.only(left: 40, top: 32, bottom: 32, right: 40),
         build: (pw.Context context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1088,7 +1481,8 @@ class PdfGenerator {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        schoolDetails['schoolName'] ?? 'School Name',
+                        schoolDetails?.schoolName ??
+                            'JAYASHA CHILDREN\'S ACADEMY',
                         style: pw.TextStyle(
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
@@ -1096,15 +1490,18 @@ class PdfGenerator {
                         ),
                       ),
                       pw.Text('Teacher Schedule: ${teacher.name}',
-                          style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                          style: pw.TextStyle(
+                              fontSize: 16, fontWeight: pw.FontWeight.bold)),
                       if (sessionName != null)
-                        pw.Text('Academic Session: $sessionName', style: const pw.TextStyle(fontSize: 12)),
+                        pw.Text('Academic Session: $sessionName',
+                            style: const pw.TextStyle(fontSize: 12)),
                     ],
                   ),
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      pw.Text('Generated on: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+                      pw.Text(
+                          'Generated on: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
                           style: const pw.TextStyle(fontSize: 10)),
                     ],
                   ),
@@ -1127,12 +1524,16 @@ class PdfGenerator {
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
                           child: pw.Text('Period',
-                              style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
+                              style: pw.TextStyle(
+                                  color: PdfColors.white,
+                                  fontWeight: pw.FontWeight.bold)),
                         ),
                         ...shortDays.map((day) => pw.Padding(
                               padding: const pw.EdgeInsets.all(8),
                               child: pw.Text(day,
-                                  style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
+                                  style: pw.TextStyle(
+                                      color: PdfColors.white,
+                                      fontWeight: pw.FontWeight.bold)),
                             )),
                       ],
                     ),
@@ -1142,7 +1543,9 @@ class PdfGenerator {
                         children: [
                           pw.Padding(
                             padding: const pw.EdgeInsets.all(8),
-                            child: pw.Text('Period ${pIdx + 1}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            child: pw.Text('Period ${pIdx + 1}',
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold)),
                           ),
                           ...List.generate(6, (dIdx) {
                             final entry = grid[pIdx][dIdx];
@@ -1152,10 +1555,14 @@ class PdfGenerator {
                                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                                 children: [
                                   pw.Text(entry?.className ?? '-',
-                                      style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                                      style: pw.TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: pw.FontWeight.bold)),
                                   if (entry != null)
                                     pw.Text(entry.subject,
-                                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                                        style: const pw.TextStyle(
+                                            fontSize: 8,
+                                            color: PdfColors.grey700)),
                                 ],
                               ),
                             );
@@ -1176,14 +1583,11 @@ class PdfGenerator {
 
   static Future<void> downloadTeacherTimetable({
     required Teacher teacher,
-    required Map<String, dynamic> schoolDetails,
     String? sessionName,
+    SchoolDetails? schoolDetails,
   }) async {
     final pdf = await _buildTeacherTimetablePdf(
-      teacher: teacher,
-      schoolDetails: schoolDetails,
-      sessionName: sessionName,
-    );
+        teacher: teacher, sessionName: sessionName, schoolDetails: schoolDetails);
     final bytes = await pdf.save();
     final fileName = 'Schedule_${teacher.name.replaceAll(' ', '_')}.pdf';
 

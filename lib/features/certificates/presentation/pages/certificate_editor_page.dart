@@ -4,9 +4,8 @@ import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/students/domain/repositories/student_repository.dart';
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
+import 'package:jayasha_childrens_academy/features/settings/data/repositories/school_repository.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
-import 'package:jayasha_childrens_academy/core/repositories/school_repository.dart';
-import 'package:jayasha_childrens_academy/core/models/school_settings.dart';
 import 'package:intl/intl.dart';
 
 class CertificateEditorPage extends StatefulWidget {
@@ -34,10 +33,10 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
   final _customTitleController = TextEditingController();
   final _bodyController = TextEditingController();
 
-  String _schoolName = 'JAYASHA CHILDREN\'S ACADEMY';
-  String _subtitle = 'Affiliated to UP Board';
+  late String _schoolName;
+  late String _subtitle;
   String _place = 'School Office';
-  String _principalLabel = 'Principal Signature';
+  late String _principalLabel;
 
   // NEW: every style map now carries 'fontSize'. Fields that can be
   // completely removed from the certificate also carry 'enabled' (defaults
@@ -76,32 +75,17 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
-  }
+    final school = Provider.of<SchoolRepository>(context, listen: false).schoolDetails;
+    _schoolName = school?.schoolName ?? 'JAYASHA CHILDREN\'S ACADEMY';
+    _subtitle = school?.affiliationLine ?? 'Affiliated to CBSE, New Delhi';
+    _principalLabel = school?.principalSignatureLabel ?? 'Principal Signature';
 
-  Future<void> _loadInitialData() async {
-    // 1. First load from certificate if editing
     if (widget.certificateData != null) {
       _loadCertificateData();
-    } else {
-      // 2. Otherwise load default from school settings
-      try {
-        final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
-        final settings = await schoolRepo.getSettings();
-        setState(() {
-          _schoolName = settings.schoolName;
-          _subtitle = 'Affiliated to ${settings.affiliationNumber}';
-          _place = settings.address.split(',').first;
-        });
-      } catch (e) {
-        debugPrint('Error loading school settings: $e');
-      }
-
-      if (widget.student != null) {
-        _student = widget.student;
-        _admNoController.text = _student!.admissionNumber;
-        _updateDefaultBody();
-      }
+    } else if (widget.student != null) {
+      _student = widget.student;
+      _admNoController.text = _student!.admissionNumber;
+      _updateDefaultBody();
     }
   }
 
@@ -249,10 +233,12 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
 
   void _downloadCurrent() {
     if (_student == null) return;
+    final school = Provider.of<SchoolRepository>(context, listen: false).schoolDetails;
     PdfGenerator.downloadCertificate(
       student: _student!,
       type: _selectedType,
       details: _buildDetailsPayload(),
+      schoolDetails: school,
     );
   }
 

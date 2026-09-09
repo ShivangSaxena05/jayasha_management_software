@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
+import 'package:jayasha_childrens_academy/features/settings/data/repositories/school_repository.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
 import 'package:intl/intl.dart';
 import 'certificate_editor_page.dart';
@@ -58,10 +59,13 @@ class _CertificatesPageState extends State<CertificatesPage> {
     if (cert['student'] == null) return;
 
     final student = StudentAdmission.fromJson(cert['student']);
+    final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
+
     PdfGenerator.downloadCertificate(
       student: student,
       type: cert['type'] ?? 'Certificate',
       details: Map<String, dynamic>.from(cert['details'] ?? {}),
+      schoolDetails: schoolRepo.schoolDetails,
     );
   }
 

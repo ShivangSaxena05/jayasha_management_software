@@ -1,43 +1,57 @@
-const SchoolSettings = require('../models/SchoolSettings');
+const School = require('../models/School');
 
-// @desc    Get school settings
-// @route   GET /api/school/settings
-// @access  Public (or Private depending on needs, usually public for headers)
-const getSettings = async (req, res) => {
+// @desc    Get school details
+// @route   GET /api/school
+// @access  Private
+exports.getSchoolDetails = async (req, res) => {
   try {
-    let settings = await SchoolSettings.findOne();
-    if (!settings) {
-      // Create default settings if none exist
-      settings = await SchoolSettings.create({
-        schoolName: "School Name",
-        address: "School Address"
+    let school = await School.findOne();
+
+    if (!school) {
+      // Return empty defaults instead of null as per spec
+      school = {
+        schoolName: '',
+        address: '',
+        phone: '',
+        email: '',
+        affiliationLine: '',
+        logoUrl: '',
+        principalSignatureLabel: 'Principal Signature'
+      };
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: school
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Update school details
+// @route   PUT /api/school
+// @access  Private (Principal)
+exports.updateSchoolDetails = async (req, res) => {
+  try {
+    let school = await School.findOne();
+
+    if (school) {
+      school = await School.findByIdAndUpdate(school._id, req.body, {
+        new: true,
+        runValidators: true
       });
-    }
-    res.json(settings);
-  } catch (error) {
-    res.status(500).json({ message: 'Server Error', error: error.message });
-  }
-};
-
-// @desc    Update school settings
-// @route   PUT /api/school/settings
-// @access  Private (Only Principal)
-const updateSettings = async (req, res) => {
-  try {
-    let settings = await SchoolSettings.findOne();
-    if (!settings) {
-      settings = new SchoolSettings(req.body);
     } else {
-      Object.assign(settings, req.body);
+      school = await School.create(req.body);
     }
-    const updatedSettings = await settings.save();
-    res.json(updatedSettings);
-  } catch (error) {
-    res.status(500).json({ message: 'Server Error', error: error.message });
-  }
-};
 
-module.exports = {
-  getSettings,
-  updateSettings,
+    res.status(200).json({
+      status: 'success',
+      data: school
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 };

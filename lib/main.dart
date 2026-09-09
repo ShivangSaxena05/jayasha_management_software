@@ -18,13 +18,17 @@ import 'package:jayasha_childrens_academy/features/staff/domain/repositories/sta
 import 'package:jayasha_childrens_academy/features/staff/data/repositories/staff_repository_impl.dart';
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
 import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_repository.dart';
-import 'package:jayasha_childrens_academy/core/repositories/school_repository.dart';
+import 'package:jayasha_childrens_academy/features/settings/data/repositories/school_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final onboardingRepo = OnboardingRepositoryImpl();
   final isComplete = await onboardingRepo.isOnboardingComplete();
+  final schoolRepo = SchoolRepositoryImpl();
+
+  // Pre-fetch school details
+  await schoolRepo.fetchSchoolDetails();
 
   runApp(
     MultiProvider(
@@ -38,7 +42,7 @@ void main() async {
         ChangeNotifierProvider<fee_domain.FeeRepository>(create: (_) => FeeRepositoryImpl()),
         Provider<CertificateRepository>(create: (_) => CertificateRepository()),
         Provider<ExamRepository>(create: (_) => ExamRepository()),
-        ChangeNotifierProvider<SchoolRepository>(create: (_) => SchoolRepository()..getSettings()),
+        ChangeNotifierProvider<SchoolRepository>(create: (_) => schoolRepo),
       ],
       child: MyApp(isComplete: isComplete),
     ),
