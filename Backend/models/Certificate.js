@@ -10,7 +10,7 @@ const certificateSchema = mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ['Transfer Certificate (TC)', 'Bonafide Certificate', 'Character Certificate'],
+      enum: ['Transfer Certificate (TC)', 'Bonafide Certificate', 'Character Certificate', 'Custom Certificate'],
     },
     certificateNumber: {
       type: String,
@@ -22,8 +22,8 @@ const certificateSchema = mongoose.Schema(
       default: Date.now,
     },
     details: {
-      type: Map,
-      of: String,
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
     issuedBy: {
       type: mongoose.Schema.Types.ObjectId,

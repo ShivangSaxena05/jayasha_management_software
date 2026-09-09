@@ -55,7 +55,40 @@ const getRecentCertificates = async (req, res) => {
   }
 };
 
+// @desc    Update a certificate
+// @route   PUT /api/certificates/:id
+// @access  Private
+const updateCertificate = async (req, res) => {
+  try {
+    const { type, details } = req.body;
+
+    let certificate = await Certificate.findById(req.params.id);
+
+    if (!certificate) {
+      return res.status(404).json({ success: false, message: 'Certificate not found' });
+    }
+
+    certificate.type = type || certificate.type;
+    certificate.details = details || certificate.details;
+
+    await certificate.save();
+
+    const updatedCertificate = await Certificate.findById(certificate._id).populate(
+      'student',
+      'name admissionNumber'
+    );
+
+    res.status(200).json({
+      success: true,
+      data: updatedCertificate,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+  }
+};
+
 module.exports = {
   generateCertificate,
   getRecentCertificates,
+  updateCertificate,
 };
