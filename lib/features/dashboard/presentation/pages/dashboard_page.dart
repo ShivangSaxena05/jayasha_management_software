@@ -16,6 +16,7 @@ import 'package:jayasha_childrens_academy/features/fees/data/repositories/fee_re
 import 'package:jayasha_childrens_academy/features/students/domain/repositories/student_repository.dart';
 import 'package:jayasha_childrens_academy/features/students/presentation/pages/student_detail_page.dart';
 import 'package:jayasha_childrens_academy/features/exams/presentation/pages/exams_page.dart';
+import 'package:jayasha_childrens_academy/features/settings/presentation/pages/school_settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
@@ -42,7 +43,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<String> _selectedClasses = [];
   final List<String> _allClasses = ['Nursery', 'LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8'];
 
-  final List<String> _titles = ['Dashboard', 'Admission', 'Students', 'Examination', 'Fee', 'Staff', 'Classes', 'Certificates'];
+  final List<String> _titles = ['Dashboard', 'Admission', 'Students', 'Examination', 'Fee', 'Staff', 'Classes', 'Certificates', 'Settings'];
 
   @override
   void initState() {
@@ -204,6 +205,8 @@ class _DashboardPageState extends State<DashboardPage> {
         return const ClassesPage();
       case 7:
         return const CertificatesPage();
+      case 8:
+        return const SchoolSettingsPage();
       default:
         return _buildUnderDevelopment();
     }

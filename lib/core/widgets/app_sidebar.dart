@@ -96,6 +96,7 @@ class _AppSidebarState extends State<AppSidebar> {
                     _buildSidebarItem(Icons.people_rounded, 'Staff', 5),
                     _buildSidebarItem(Icons.class_rounded, 'Classes', 6),
                     _buildSidebarItem(Icons.verified_rounded, 'Certificates', 7),
+                    _buildSidebarItem(Icons.settings_rounded, 'Settings', 8),
                   ],
                 ),
               ),

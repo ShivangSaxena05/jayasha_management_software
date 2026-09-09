@@ -18,6 +18,7 @@ import 'package:jayasha_childrens_academy/features/staff/domain/repositories/sta
 import 'package:jayasha_childrens_academy/features/staff/data/repositories/staff_repository_impl.dart';
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
 import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_repository.dart';
+import 'package:jayasha_childrens_academy/core/repositories/school_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,7 @@ void main() async {
         ChangeNotifierProvider<fee_domain.FeeRepository>(create: (_) => FeeRepositoryImpl()),
         Provider<CertificateRepository>(create: (_) => CertificateRepository()),
         Provider<ExamRepository>(create: (_) => ExamRepository()),
+        Provider<SchoolRepository>(create: (_) => SchoolRepository()),
       ],
       child: MyApp(isComplete: isComplete),
     ),

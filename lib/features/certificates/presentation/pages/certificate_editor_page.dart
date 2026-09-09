@@ -5,6 +5,8 @@ import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/students/domain/repositories/student_repository.dart';
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
+import 'package:jayasha_childrens_academy/core/repositories/school_repository.dart';
+import 'package:jayasha_childrens_academy/core/models/school_settings.dart';
 import 'package:intl/intl.dart';
 
 class CertificateEditorPage extends StatefulWidget {
@@ -74,12 +76,32 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    // 1. First load from certificate if editing
     if (widget.certificateData != null) {
       _loadCertificateData();
-    } else if (widget.student != null) {
-      _student = widget.student;
-      _admNoController.text = _student!.admissionNumber;
-      _updateDefaultBody();
+    } else {
+      // 2. Otherwise load default from school settings
+      try {
+        final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
+        final settings = await schoolRepo.getSettings();
+        setState(() {
+          _schoolName = settings.schoolName;
+          _subtitle = 'Affiliated to ${settings.affiliationNumber}';
+          _place = settings.address.split(',').first;
+        });
+      } catch (e) {
+        debugPrint('Error loading school settings: $e');
+      }
+
+      if (widget.student != null) {
+        _student = widget.student;
+        _admNoController.text = _student!.admissionNumber;
+        _updateDefaultBody();
+      }
     }
   }
 

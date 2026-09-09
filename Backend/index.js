@@ -29,6 +29,7 @@ app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/students', require('./routes/studentRoutes'));
 app.use('/api/certificates', require('./routes/certificateRoutes'));
 app.use('/api/exams', require('./routes/examinationRoutes'));
+app.use('/api/school', require('./routes/schoolRoutes'));
 
 // Error handling middleware (placeholder)
 app.use((err, req, res, next) => {
