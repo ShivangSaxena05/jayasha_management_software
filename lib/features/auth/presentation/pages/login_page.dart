@@ -224,28 +224,6 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () async {
-                        final repo = Provider.of<OnboardingRepository>(context, listen: false);
-                        setState(() => _isLoading = true);
-                        await repo.clearOnboardingData();
-                        await _checkSetupStatus();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Database and local data cleared. Starting fresh.')),
-                          );
-                        }
-                      },
-                      child: const Text(
-                        'RESET ALL DATA (DEV ONLY)',
-                        style: TextStyle(
-                          color: Colors.redAccent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),

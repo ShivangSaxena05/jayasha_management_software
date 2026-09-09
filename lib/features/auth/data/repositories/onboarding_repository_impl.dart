@@ -22,6 +22,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       print('DEBUG: Checking school setup at ${ApiConfig.checkSetup}');
       final response = await http.get(Uri.parse(ApiConfig.checkSetup));
       print('DEBUG: isSchoolSetup status code: ${response.statusCode}');
+      print('DEBUG: isSchoolSetup response body: ${response.body}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['isSetup'] ?? false;
@@ -53,6 +54,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       );
 
       print('DEBUG: setupPrincipal status code: ${response.statusCode}');
+      print('DEBUG: setupPrincipal response body: ${response.body}');
       if (response.statusCode == 201) {
         final data = jsonDecode(response.body);
         final prefs = await SharedPreferences.getInstance();
@@ -79,6 +81,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       );
 
       print('DEBUG: loginWithPin status code: ${response.statusCode}');
+      print('DEBUG: loginWithPin response body: ${response.body}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final prefs = await SharedPreferences.getInstance();
@@ -258,17 +261,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
   @override
   Future<void> clearOnboardingData() async {
     final prefs = await SharedPreferences.getInstance();
-
-    // Call backend to reset setup first (deletes all DB data)
-    try {
-      print('DEBUG: Resetting setup on server (wiping database)...');
-      final response = await http.post(Uri.parse('${ApiConfig.baseUrl}/users/reset-setup'));
-      print('DEBUG: Reset setup status code: ${response.statusCode}');
-    } catch (e) {
-      print('DEBUG: Error resetting server setup: $e');
-    }
-
-    // Now clear all local storage
+    // Clear all local storage
     await prefs.clear();
     print('DEBUG: Local SharedPreferences cleared.');
   }
