@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/features/fees/data/models/fee_structure.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 import '../models/school_class.dart';
 
 class ClassRepository extends ChangeNotifier {
@@ -22,8 +22,8 @@ class ClassRepository extends ChangeNotifier {
   Future<List<dynamic>> getClasses() async {
     try {
       final token = await _getToken();
-      final response = await http.get(
-        Uri.parse(ApiConfig.classes),
+      final response = await ApiClient.get(
+        ApiConfig.classes,
         headers: {
           'Authorization': 'Bearer $token',
         },
@@ -43,11 +43,10 @@ class ClassRepository extends ChangeNotifier {
 
     try {
       final token = await _getToken();
-      final response = await http.get(
-        Uri.parse('${ApiConfig.classes}?sessionId=$sessionId'),
+      final response = await ApiClient.get(
+        '${ApiConfig.classes}?sessionId=$sessionId',
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
       );
 
@@ -66,17 +65,16 @@ class ClassRepository extends ChangeNotifier {
   Future<bool> addClass(String sessionId, String name, List<String> sections) async {
     try {
       final token = await _getToken();
-      final response = await http.post(
-        Uri.parse('${ApiConfig.classes}/add'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
+      final response = await ApiClient.post(
+        '${ApiConfig.classes}/add',
+        {
           'academicSessionId': sessionId,
           'name': name,
           'sections': sections,
-        }),
+        },
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
       );
 
       if (response.statusCode == 201) {
@@ -96,13 +94,12 @@ class ClassRepository extends ChangeNotifier {
 
     try {
       final token = await _getToken();
-      final response = await http.put(
-        Uri.parse('${ApiConfig.classes}/${updatedClass.id}'),
+      final response = await ApiClient.put(
+        '${ApiConfig.classes}/${updatedClass.id}',
+        updatedClass.toJson(),
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
-        body: jsonEncode(updatedClass.toJson()),
       );
 
       if (response.statusCode == 200) {

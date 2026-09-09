@@ -419,7 +419,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                   final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
                   final session = await dashboardRepo.getCurrentSession();
                   if (mounted) {
-                    PdfGenerator.generateTeacherTimetable(
+                    PdfGenerator.downloadTeacherTimetable(
                       teacher: teacher,
                       sessionName: session?.sessionName,
                     );

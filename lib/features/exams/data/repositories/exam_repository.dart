@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 
 class ExamRepository {
   Future<Map<String, dynamic>> createExam(Map<String, dynamic> examData) async {
@@ -9,13 +9,12 @@ class ExamRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.post(
-        Uri.parse(ApiConfig.exams),
+      final response = await ApiClient.post(
+        ApiConfig.exams,
+        examData,
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode(examData),
       );
 
       return jsonDecode(response.body);
@@ -29,13 +28,12 @@ class ExamRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.put(
-        Uri.parse('${ApiConfig.exams}/$examId'),
+      final response = await ApiClient.put(
+        '${ApiConfig.exams}/$examId',
+        examData,
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode(examData),
       );
 
       return jsonDecode(response.body);
@@ -56,8 +54,8 @@ class ExamRepository {
       String url = '${ApiConfig.exams}/$examId/datesheet';
       if (classId != null) url += '?classId=$classId';
 
-      final response = await http.get(
-        Uri.parse(url),
+      final response = await ApiClient.get(
+        url,
         headers: {
           'Authorization': 'Bearer $token',
         },
@@ -74,8 +72,8 @@ class ExamRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.delete(
-        Uri.parse('${ApiConfig.exams}/$examId'),
+      final response = await ApiClient.delete(
+        '${ApiConfig.exams}/$examId',
         headers: {
           'Authorization': 'Bearer $token',
         },
@@ -105,8 +103,8 @@ class ExamRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.exams}?session=$sessionId'),
+      final response = await ApiClient.get(
+        '${ApiConfig.exams}?session=$sessionId',
         headers: {
           'Authorization': 'Bearer $token',
         },
@@ -127,17 +125,16 @@ class ExamRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.post(
-        Uri.parse(ApiConfig.examMarks),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
+      final response = await ApiClient.post(
+        ApiConfig.examMarks,
+        {
           'examId': examId,
           'classId': classId,
           'marksData': marksData,
-        }),
+        },
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
       );
 
       return jsonDecode(response.body);
@@ -151,8 +148,8 @@ class ExamRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.examMarks}?examId=$examId&classId=$classId'),
+      final response = await ApiClient.get(
+        '${ApiConfig.examMarks}?examId=$examId&classId=$classId',
         headers: {
           'Authorization': 'Bearer $token',
         },
@@ -169,8 +166,8 @@ class ExamRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.reportCard}?studentId=$studentId&examId=$examId'),
+      final response = await ApiClient.get(
+        '${ApiConfig.reportCard}?studentId=$studentId&examId=$examId',
         headers: {
           'Authorization': 'Bearer $token',
         },

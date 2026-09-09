@@ -54,11 +54,11 @@ class _CertificatesPageState extends State<CertificatesPage> {
     }
   }
 
-  void _printCertificate(Map<String, dynamic> cert) {
+  void _downloadCertificate(Map<String, dynamic> cert) {
     if (cert['student'] == null) return;
 
     final student = StudentAdmission.fromJson(cert['student']);
-    PdfGenerator.printCertificate(
+    PdfGenerator.downloadCertificate(
       student: student,
       type: cert['type'] ?? 'Certificate',
       details: Map<String, dynamic>.from(cert['details'] ?? {}),
@@ -186,9 +186,9 @@ class _CertificatesPageState extends State<CertificatesPage> {
               tooltip: 'Edit',
             ),
             IconButton(
-              icon: const Icon(Icons.print_outlined, color: Colors.green),
-              onPressed: () => _printCertificate(cert),
-              tooltip: 'Print',
+              icon: const Icon(Icons.download_outlined, color: Colors.blue),
+              onPressed: () => _downloadCertificate(cert),
+              tooltip: 'Download',
             ),
           ],
         ),

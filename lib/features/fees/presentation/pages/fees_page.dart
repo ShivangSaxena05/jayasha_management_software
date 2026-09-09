@@ -362,6 +362,43 @@ class _FeesPageState extends State<FeesPage> {
                   DataCell(Row(
                     children: [
                       IconButton(
+                        icon: const Icon(Icons.download_outlined, size: 18, color: AppColors.primary),
+                        tooltip: 'Download Receipt',
+                        onPressed: () async {
+                          try {
+                            final studentRepo = Provider.of<StudentRepository>(context, listen: false);
+                            final student = await studentRepo.getStudentById(payment['studentId']);
+
+                            if (student != null && mounted) {
+                              // Create a FeePayment object from the map
+                              final feePayment = FeePayment(
+                                id: payment['id'],
+                                studentId: payment['studentId'],
+                                academicSessionId: student.academicSessionId,
+                                amount: payment['amount'],
+                                date: payment['date'],
+                                mode: payment['mode'],
+                                category: payment['category'],
+                                paidMonths: payment['paidMonths'] ?? [],
+                                remarks: payment['remarks'],
+                              );
+
+                              await PdfGenerator.downloadFeeReceipt(
+                                student: student,
+                                payment: feePayment,
+                              );
+                            }
+                          } catch (e) {
+                            debugPrint('Error downloading receipt: $e');
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Failed to generate receipt')),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                      IconButton(
                         icon: const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textSecondary),
                         tooltip: 'View Student',
                         onPressed: () async {

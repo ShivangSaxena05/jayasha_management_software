@@ -19,22 +19,76 @@ class FeeStructurePage extends StatefulWidget {
 class _FeeStructurePageState extends State<FeeStructurePage> {
   SchoolClass? selectedClass;
   List<FeeComponent> _components = [];
+  List<FeeStructure> _allFeeStructures = [];
+  bool _isLoading = false;
   final List<String> _allMonths = [
     'April', 'May', 'June', 'July', 'August', 'September',
     'October', 'November', 'December', 'January', 'February', 'March'
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadFeeStructures();
+    });
+  }
+
+  Future<void> _loadFeeStructures({bool showLoader = true}) async {
+    if (showLoader) setState(() => _isLoading = true);
+    try {
+      final feeRepo = Provider.of<FeeRepository>(context, listen: false);
+      final classRepo = Provider.of<ClassRepository>(context, listen: false);
+      final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
+
+      // 1. Get current session
+      final session = await dashboardRepo.getCurrentSession();
+      if (session != null) {
+        // 2. Fetch classes if empty
+        if (classRepo.classes.isEmpty) {
+          await classRepo.fetchClasses(session.id!);
+        }
+      }
+
+      // 3. Load fee structures
+      final structures = await feeRepo.getFeeStructures();
+      setState(() {
+        _allFeeStructures = structures.map((json) => FeeStructure.fromJson(json)).toList();
+
+        // Auto-select first class if none selected
+        if (selectedClass == null && classRepo.classes.isNotEmpty) {
+          selectedClass = classRepo.classes.first;
+        }
+
+        if (selectedClass != null) {
+          _initializeComponents(selectedClass);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error loading fee structures: $e');
+    } finally {
+      if (showLoader) setState(() => _isLoading = false);
+    }
+  }
+
   void _initializeComponents(SchoolClass? currentClass) {
     if (currentClass == null) return;
 
-    if (currentClass.feeStructure.isEmpty) {
+    // Check standalone FeeStructure collection first (Source of Truth)
+    final existingStructure = _allFeeStructures.where((s) => s.classId == currentClass.id).firstOrNull;
+
+    if (existingStructure != null && existingStructure.components.isNotEmpty) {
+      _components = existingStructure.components.map((c) => c.copyWith()).toList();
+    } else if (currentClass.feeStructure.isNotEmpty) {
+      // Fallback to embedded structure if collection is empty
+      _components = currentClass.feeStructure.map((c) => c.copyWith()).toList();
+    } else {
+      // Default empty structure
       _components = [
         FeeComponent(name: 'Monthly Tuition Fee', amount: 0, frequency: 'monthly', applicableMonths: List.from(_allMonths)),
         FeeComponent(name: 'Annual Admission Fee', amount: 0, frequency: 'annually', applicableMonths: []),
         FeeComponent(name: 'Examination Fee', amount: 0, frequency: 'annually', applicableMonths: []),
       ];
-    } else {
-      _components = currentClass.feeStructure.map((c) => c.copyWith()).toList();
     }
   }
 
@@ -52,7 +106,9 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
 
     return Padding(
       padding: const EdgeInsets.all(30),
-      child: Column(
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -183,6 +239,7 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
                                 final success = await feeRepo.saveFeeStructure(feeData);
                                 if (success) {
                                   await classRepo.updateFeeStructure(selectedClass!.id!, _components);
+                                  await _loadFeeStructures(showLoader: false);
 
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(

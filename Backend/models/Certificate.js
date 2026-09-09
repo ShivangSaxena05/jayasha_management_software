@@ -10,7 +10,7 @@ const certificateSchema = mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ['Transfer Certificate (TC)', 'Bonafide Certificate', 'Character Certificate', 'Custom Certificate'],
+      enum: ['Transfer Certificate (TC)', 'Bonafide Certificate', 'Character Certificate', 'Custom Certificate', 'Identity Card'],
     },
     certificateNumber: {
       type: String,

@@ -225,9 +225,9 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
     }
   }
 
-  void _printCurrent() {
+  void _downloadCurrent() {
     if (_student == null) return;
-    PdfGenerator.printCertificate(
+    PdfGenerator.downloadCertificate(
       student: _student!,
       type: _selectedType,
       details: _buildDetailsPayload(),
@@ -245,9 +245,9 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: IconButton(
-                icon: const Icon(Icons.print),
-                onPressed: _printCurrent,
-                tooltip: 'Print Certificate',
+                icon: const Icon(Icons.download),
+                onPressed: _downloadCurrent,
+                tooltip: 'Download Certificate',
               ),
             ),
         ],

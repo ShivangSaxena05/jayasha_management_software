@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 
 class CertificateRepository {
   /// Safely decodes a response body. Returns a clean failure map instead of
@@ -39,17 +40,16 @@ class CertificateRepository {
       // every request to send "Authorization: Bearer null" -> Unauthorized.
       final token = prefs.getString('auth_token');
 
-      final response = await http.post(
-        Uri.parse(ApiConfig.certificates),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
+      final response = await ApiClient.post(
+        ApiConfig.certificates,
+        {
           'studentId': studentId,
           'type': type,
           'details': details,
-        }),
+        },
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
       );
 
       return _safeDecode(response);
@@ -67,16 +67,15 @@ class CertificateRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token'); // FIX: was 'token'
 
-      final response = await http.put(
-        Uri.parse('${ApiConfig.certificates}/$certificateId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
+      final response = await ApiClient.put(
+        '${ApiConfig.certificates}/$certificateId',
+        {
           'type': type,
           'details': details,
-        }),
+        },
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
       );
 
       return _safeDecode(response);
@@ -90,10 +89,9 @@ class CertificateRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token'); // FIX: was 'token'
 
-      final response = await http.get(
-        Uri.parse(ApiConfig.recentCertificates),
+      final response = await ApiClient.get(
+        ApiConfig.recentCertificates,
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );

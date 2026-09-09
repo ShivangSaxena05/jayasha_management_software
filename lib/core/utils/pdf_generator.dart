@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'package:flutter/material.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/core/models/fee_payment.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
@@ -10,7 +12,7 @@ import 'package:jayasha_childrens_academy/features/classes/data/models/school_cl
 import 'package:intl/intl.dart';
 
 class PdfGenerator {
-  static Future<void> printCertificate({
+  static Future<pw.Document> _buildCertificatePdf({
     required StudentAdmission student,
     required String type,
     required Map<String, dynamic> details,
@@ -170,8 +172,179 @@ class PdfGenerator {
         },
       ),
     );
+    return pdf;
+  }
+
+  static Future<void> printCertificate({
+    required StudentAdmission student,
+    required String type,
+    required Map<String, dynamic> details,
+  }) async {
+    final pdf = await _buildCertificatePdf(student: student, type: type, details: details);
+    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+  }
+
+  static Future<void> printIdCard({
+    required StudentAdmission student,
+    required Map<String, dynamic> details,
+  }) async {
+    final pdf = pw.Document();
+
+    // CR80 is 85.6mm x 53.98mm
+    const double cardWidth = 85.6 * PdfPageFormat.mm;
+    const double cardHeight = 54.0 * PdfPageFormat.mm;
+
+    pw.ImageProvider? studentPhoto;
+    if (student.photoPath != null) {
+      try {
+        studentPhoto = await networkImage(student.photoPath!);
+      } catch (e) {
+        debugPrint('Error loading student photo for PDF: $e');
+      }
+    }
+
+    // Simple color selection for PDF header
+    final pdfHeaderColor = details['schoolNameStyle']?['color'] != null
+        ? PdfColor.fromInt(details['schoolNameStyle']['color'])
+        : PdfColors.blue50;
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: const PdfPageFormat(cardWidth, cardHeight, marginAll: 0),
+        build: (pw.Context context) {
+          return pw.Container(
+            width: cardWidth,
+            height: cardHeight,
+            decoration: pw.BoxDecoration(
+              color: PdfColors.white,
+              border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                  color: pdfHeaderColor,
+                  child: pw.Column(
+                    children: [
+                      pw.Text(
+                        details['schoolName'] ?? 'JAYASHA CHILDREN\'S ACADEMY',
+                        textAlign: _getPdfAlign(details['schoolNameStyle']?['align']),
+                        style: _getPdfStyle(details['schoolNameStyle'], 14),
+                      ),
+                      if (details['addressStyle']?['enabled'] ?? true)
+                        pw.Text(
+                          details['schoolAddress'] ?? '',
+                          textAlign: _getPdfAlign(details['addressStyle']?['align']),
+                          style: _getPdfStyle(details['addressStyle'], 8),
+                        ),
+                    ],
+                  ),
+                ),
+                pw.Divider(thickness: 0.5, color: PdfColors.grey400, height: 0),
+                pw.Expanded(
+                  child: pw.Padding(
+                    padding: const pw.EdgeInsets.all(10),
+                    child: pw.Row(
+                      children: [
+                        pw.Container(
+                          width: 60,
+                          height: 75,
+                          decoration: pw.BoxDecoration(
+                            color: PdfColors.grey200,
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+                          ),
+                          child: studentPhoto != null
+                              ? pw.Image(studentPhoto, fit: pw.BoxFit.cover)
+                              : pw.Center(child: pw.PdfLogo()), // Placeholder
+                        ),
+                        pw.SizedBox(width: 12),
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            mainAxisAlignment: pw.MainAxisAlignment.center,
+                            children: [
+                              _pdfCardDataRow('Name', student.name, isBold: true),
+                              pw.SizedBox(height: 3),
+                              _pdfCardDataRow('Class', '${student.className ?? 'N/A'} - ${student.section ?? 'N/A'}'),
+                              pw.SizedBox(height: 3),
+                              _pdfCardDataRow('Roll No', student.rollNumber ?? 'Not Assigned'),
+                              pw.SizedBox(height: 3),
+                              _pdfCardDataRow('Adm No', student.admissionNumber),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
 
     await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+  }
+
+  static pw.TextStyle _getPdfStyle(Map<String, dynamic>? style, double defaultSize) {
+    if (style == null) return pw.TextStyle(fontSize: defaultSize);
+    return pw.TextStyle(
+      fontSize: (style['fontSize'] ?? defaultSize).toDouble(),
+      fontWeight: style['bold'] == true ? pw.FontWeight.bold : pw.FontWeight.normal,
+      fontStyle: style['italic'] == true ? pw.FontStyle.italic : pw.FontStyle.normal,
+      decoration: style['underline'] == true ? pw.TextDecoration.underline : pw.TextDecoration.none,
+      color: style['color'] != null ? PdfColor.fromInt(style['color']) : PdfColors.black,
+    );
+  }
+
+  static pw.TextAlign _getPdfAlign(String? align) {
+    switch (align) {
+      case 'left': return pw.TextAlign.left;
+      case 'right': return pw.TextAlign.right;
+      default: return pw.TextAlign.center;
+    }
+  }
+
+  static pw.Widget _pdfCardDataRow(String label, String value, {bool isBold = false}) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(label.toUpperCase(), style: pw.TextStyle(fontSize: 6, color: PdfColors.grey700, fontWeight: pw.FontWeight.bold)),
+        pw.Text(value, style: pw.TextStyle(fontSize: 9, fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+      ],
+    );
+  }
+
+  static Future<void> downloadCertificate({
+    required StudentAdmission student,
+    required String type,
+    required Map<String, dynamic> details,
+  }) async {
+    final pdf = await _buildCertificatePdf(student: student, type: type, details: details);
+    final bytes = await pdf.save();
+
+    final fileName = '${type.replaceAll(' ', '_')}_${student.admissionNumber}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Certificate As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
   }
 
   static Future<void> generateCertificate({
@@ -487,14 +660,29 @@ class PdfGenerator {
     final pdf = await _buildFeeReceiptPdf(student: student, payment: payment, sessionName: sessionName);
     final bytes = await pdf.save();
 
-    // Printing.sharePdf shows the native share/save sheet which handles "Downloading" locally
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Receipt_${student.admissionNumber}_${DateFormat('yyyyMMdd').format(payment.date)}.pdf'
-    );
+    final fileName = 'Receipt_${student.admissionNumber}_${DateFormat('yyyyMMdd').format(payment.date)}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Fee Receipt As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
   }
 
-  static Future<void> generateReportCard({
+  static Future<void> downloadReportCard({
     required dynamic markRecord,
   }) async {
     final pdf = pw.Document();
@@ -587,10 +775,30 @@ class PdfGenerator {
       ),
     );
 
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+    final bytes = await pdf.save();
+    final fileName = 'ReportCard_${student['admissionNumber']}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Report Card As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
   }
 
-  static Future<void> generateExamDatesheet({
+  static Future<void> downloadExamDatesheet({
     required dynamic exam,
     required List<dynamic> datesheet,
     required String className,
@@ -598,13 +806,30 @@ class PdfGenerator {
   }) async {
     final pdf = pw.Document();
     _addDatesheetPage(pdf, exam, datesheet, className, sessionName);
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Datesheet_${className}_${exam['name']}.pdf',
-    );
+    final bytes = await pdf.save();
+    final fileName = 'Datesheet_${className.replaceAll(' ', '_')}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Exam Datesheet As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
   }
 
-  static Future<void> generateAllClassesDatesheet({
+  static Future<void> downloadAllClassesDatesheet({
     required dynamic exam,
     required List<dynamic> fullDatesheet,
     required List<dynamic> classes,
@@ -626,10 +851,27 @@ class PdfGenerator {
       }
     }
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Full_Datesheet_${exam['name']}.pdf',
-    );
+    final bytes = await pdf.save();
+    final fileName = 'Full_Datesheet_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Full Datesheet As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
   }
 
   static void _addDatesheetPage(pw.Document pdf, dynamic exam, List<dynamic> datesheet, String className, String? sessionName) {
@@ -725,7 +967,7 @@ class PdfGenerator {
     );
   }
 
-  static Future<void> generateClassTimetable({
+  static Future<pw.Document> _buildClassTimetablePdf({
     required SchoolClass schoolClass,
     String? sessionName,
   }) async {
@@ -830,14 +1072,38 @@ class PdfGenerator {
         },
       ),
     );
-
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Timetable_${schoolClass.name.replaceAll(' ', '_')}.pdf',
-    );
+    return pdf;
   }
 
-  static Future<void> generateTeacherTimetable({
+  static Future<void> downloadClassTimetable({
+    required SchoolClass schoolClass,
+    String? sessionName,
+  }) async {
+    final pdf = await _buildClassTimetablePdf(schoolClass: schoolClass, sessionName: sessionName);
+    final bytes = await pdf.save();
+    final fileName = 'Timetable_${schoolClass.name.replaceAll(' ', '_')}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Timetable As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
+  }
+
+  static Future<pw.Document> _buildTeacherTimetablePdf({
     required Teacher teacher,
     String? sessionName,
   }) async {
@@ -962,10 +1228,34 @@ class PdfGenerator {
         },
       ),
     );
+    return pdf;
+  }
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Schedule_${teacher.name.replaceAll(' ', '_')}.pdf',
-    );
+  static Future<void> downloadTeacherTimetable({
+    required Teacher teacher,
+    String? sessionName,
+  }) async {
+    final pdf = await _buildTeacherTimetablePdf(teacher: teacher, sessionName: sessionName);
+    final bytes = await pdf.save();
+    final fileName = 'Schedule_${teacher.name.replaceAll(' ', '_')}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Schedule As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
   }
 }

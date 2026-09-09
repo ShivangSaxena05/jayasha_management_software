@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/fee_payment.dart';
 import 'package:jayasha_childrens_academy/features/fees/domain/repositories/fee_repository.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 
 class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
   static const String _tokenKey = 'auth_token';
@@ -15,13 +15,12 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/fees/payments'),
+      final response = await ApiClient.post(
+        '${ApiConfig.baseUrl}/fees/payments',
+        payment.toJson(),
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode(payment.toJson()),
       );
 
       if (response.statusCode == 201) {
@@ -41,10 +40,9 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/fees/student/$studentId'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/fees/student/$studentId',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
@@ -65,13 +63,12 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/fees/structure'),
+      final response = await ApiClient.post(
+        '${ApiConfig.baseUrl}/fees/structure',
+        {'fees': fees},
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'fees': fees}),
       );
 
       return response.statusCode == 201;
@@ -87,10 +84,9 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/fees/structure'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/fees/structure',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
@@ -112,10 +108,9 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/fees/payments'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/fees/payments',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
@@ -154,10 +149,9 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/fees/student/$studentId/payments'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/fees/student/$studentId/payments',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
@@ -179,10 +173,9 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/fees/stats'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/fees/stats',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
@@ -203,10 +196,9 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/fees/pending'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/fees/pending',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );

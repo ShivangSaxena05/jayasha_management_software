@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/academic_session.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 
 class DashboardRepository extends ChangeNotifier {
   Map<String, dynamic> _stats = {};
@@ -14,10 +14,9 @@ class DashboardRepository extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/dashboard/stats'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/dashboard/stats',
         headers: {
-          'Content-Type': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token',
         },
       );
@@ -42,10 +41,9 @@ class DashboardRepository extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.academicSession}/active'),
+      final response = await ApiClient.get(
+        '${ApiConfig.academicSession}/active',
         headers: {
-          'Content-Type': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token',
         },
       );

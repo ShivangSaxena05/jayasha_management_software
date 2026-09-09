@@ -7,6 +7,7 @@ import 'package:jayasha_childrens_academy/core/models/teacher.dart';
 import 'package:jayasha_childrens_academy/core/models/academic_session.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onboarding_repository.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 
 class OnboardingRepositoryImpl implements OnboardingRepository {
   static const String _tokenKey = 'auth_token';
@@ -20,7 +21,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
   Future<bool> isSchoolSetup() async {
     try {
       print('DEBUG: Checking school setup at ${ApiConfig.checkSetup}');
-      final response = await http.get(Uri.parse(ApiConfig.checkSetup));
+      final response = await ApiClient.get(ApiConfig.checkSetup);
       print('DEBUG: isSchoolSetup status code: ${response.statusCode}');
       print('DEBUG: isSchoolSetup response body: ${response.body}');
       if (response.statusCode == 200) {
@@ -43,14 +44,13 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
   }) async {
     try {
       print('DEBUG: Setting up principal at ${ApiConfig.setupPrincipal}');
-      final response = await http.post(
-        Uri.parse(ApiConfig.setupPrincipal),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final response = await ApiClient.post(
+        ApiConfig.setupPrincipal,
+        {
           'name': name,
           'securityPin': securityPin,
           'principalDetails': principalDetails.toJson(),
-        }),
+        },
       );
 
       print('DEBUG: setupPrincipal status code: ${response.statusCode}');
@@ -74,10 +74,9 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
   Future<bool> loginWithPin(String pin) async {
     try {
       print('DEBUG: Logging in with PIN at ${ApiConfig.pinLogin}');
-      final response = await http.post(
-        Uri.parse(ApiConfig.pinLogin),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'securityPin': pin}),
+      final response = await ApiClient.post(
+        ApiConfig.pinLogin,
+        {'securityPin': pin},
       );
 
       print('DEBUG: loginWithPin status code: ${response.statusCode}');
@@ -113,13 +112,12 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     if (token != null) {
        try {
          print('DEBUG: Saving academic session to ${ApiConfig.academicSession}');
-         final response = await http.post(
-          Uri.parse(ApiConfig.academicSession),
+         final response = await ApiClient.post(
+          ApiConfig.academicSession,
+          session.toJson(),
           headers: {
-            'Content-Type': 'application/json',
             'Authorization': 'Bearer $token'
           },
-          body: jsonEncode(session.toJson()),
         );
          print('DEBUG: saveAcademicSession status code: ${response.statusCode}');
        } catch (e) {
@@ -138,13 +136,12 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     if (token != null) {
       try {
         print('DEBUG: Saving teachers details to ${ApiConfig.teachers}');
-        final response = await http.post(
-          Uri.parse(ApiConfig.teachers),
+        final response = await ApiClient.post(
+          ApiConfig.teachers,
+          {'teachers': teachersJson},
           headers: {
-            'Content-Type': 'application/json',
             'Authorization': 'Bearer $token'
           },
-          body: jsonEncode({'teachers': teachersJson}),
         );
         print('DEBUG: saveTeachersDetails status code: ${response.statusCode}');
         if (response.statusCode != 200 && response.statusCode != 201) {
@@ -184,10 +181,9 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       final token = prefs.getString(_tokenKey);
       if (token == null) return null;
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/users/profile'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/users/profile',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token'
         },
       );
@@ -213,13 +209,12 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       final token = prefs.getString(_tokenKey);
       if (token == null) return false;
 
-      final response = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/users/profile'),
+      final response = await ApiClient.put(
+        '${ApiConfig.baseUrl}/users/profile',
+        principal.toJson(),
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token'
         },
-        body: jsonEncode(principal.toJson()),
       );
 
       if (response.statusCode == 200) {
@@ -279,13 +274,12 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     final session = await getAcademicSession();
     if (session != null) {
       print('DEBUG: Syncing academic session...');
-      final sessionResponse = await http.post(
-        Uri.parse(ApiConfig.academicSession),
+      final sessionResponse = await ApiClient.post(
+        ApiConfig.academicSession,
+        session.toJson(),
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token'
         },
-        body: jsonEncode(session.toJson()),
       );
 
       print('DEBUG: Sync academic session status: ${sessionResponse.statusCode}');
@@ -301,8 +295,8 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
           final Map<String, dynamic> fees = jsonDecode(feesJson);
 
           // Get created classes from server for THIS session to match IDs
-          final classesResponse = await http.get(
-            Uri.parse('${ApiConfig.classes}?sessionId=$sessionId'),
+          final classesResponse = await ApiClient.get(
+            '${ApiConfig.classes}?sessionId=$sessionId',
             headers: {'Authorization': 'Bearer $token'},
           );
 
@@ -346,13 +340,12 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
             }
 
             if (feePayload.isNotEmpty) {
-              final feeResponse = await http.post(
-                Uri.parse('${ApiConfig.baseUrl}/fees/structure'),
+              final feeResponse = await ApiClient.post(
+                '${ApiConfig.baseUrl}/fees/structure',
+                {'fees': feePayload},
                 headers: {
-                  'Content-Type': 'application/json',
                   'Authorization': 'Bearer $token'
                 },
-                body: jsonEncode({'fees': feePayload}),
               );
               print('DEBUG: Sync fee structure status: ${feeResponse.statusCode}');
             }
@@ -370,13 +363,12 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     if (teachers.isNotEmpty) {
       print('DEBUG: Syncing ${teachers.length} teachers...');
       final teachersJson = teachers.map((t) => t.toJson()).toList();
-      final response = await http.post(
-        Uri.parse(ApiConfig.teachers),
+      final response = await ApiClient.post(
+        ApiConfig.teachers,
+        {'teachers': teachersJson},
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token'
         },
-        body: jsonEncode({'teachers': teachersJson}),
       );
       print('DEBUG: Sync teachers status: ${response.statusCode}');
       if (response.statusCode != 200 && response.statusCode != 201) {

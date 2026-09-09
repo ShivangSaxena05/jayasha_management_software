@@ -8,6 +8,7 @@ import 'package:jayasha_childrens_academy/features/students/domain/repositories/
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
 import 'package:jayasha_childrens_academy/core/models/academic_session.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
+import 'package:jayasha_childrens_academy/features/certificates/presentation/pages/id_card_editor_page.dart';
 import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_repository.dart';
 import 'package:jayasha_childrens_academy/features/fees/presentation/widgets/add_payment_dialog.dart';
 import 'package:intl/intl.dart';
@@ -154,6 +155,18 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.badge_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => IdCardEditorPage(student: widget.student),
+                ),
+              );
+            },
+            tooltip: 'Create ID Card',
+          ),
           if (_isEditing) ...[
             if (_isSaving)
               const Center(child: Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))

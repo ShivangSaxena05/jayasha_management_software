@@ -705,7 +705,7 @@ class _ExamsPageState extends State<ExamsPage> {
         final List<dynamic> fullDatesheet = exam['datesheet'] ?? [];
         final classDatesheet = fullDatesheet.where((d) => d['classId'] == _selectedClass['_id']).toList();
 
-        await PdfGenerator.generateExamDatesheet(
+        await PdfGenerator.downloadExamDatesheet(
           exam: exam,
           datesheet: classDatesheet,
           className: _selectedClass['section'] != null
@@ -739,7 +739,7 @@ class _ExamsPageState extends State<ExamsPage> {
         final examClassIds = List<String>.from(exam['classes'] ?? []);
         final examClasses = _classes.where((c) => examClassIds.contains(c['_id'])).toList();
 
-        await PdfGenerator.generateAllClassesDatesheet(
+        await PdfGenerator.downloadAllClassesDatesheet(
           exam: exam,
           fullDatesheet: fullDatesheet,
           classes: examClasses,

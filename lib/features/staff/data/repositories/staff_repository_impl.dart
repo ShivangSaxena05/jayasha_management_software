@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
 import 'package:jayasha_childrens_academy/core/models/salary_record.dart';
 import 'package:jayasha_childrens_academy/core/models/leave_record.dart';
 import 'package:jayasha_childrens_academy/features/staff/domain/repositories/staff_repository.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 
 class StaffRepositoryImpl implements StaffRepository {
   static const String _tokenKey = 'auth_token';
@@ -24,11 +24,10 @@ class StaffRepositoryImpl implements StaffRepository {
     try {
       final token = await _getToken();
       print('Fetching teachers from: ${ApiConfig.teachers}');
-      final response = await http.get(
-        Uri.parse(ApiConfig.teachers),
+      final response = await ApiClient.get(
+        ApiConfig.teachers,
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
       );
 
@@ -50,13 +49,12 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<bool> addTeacher(Teacher teacher) async {
     try {
       final token = await _getToken();
-      final response = await http.post(
-        Uri.parse('${ApiConfig.teachers}/add'),
+      final response = await ApiClient.post(
+        '${ApiConfig.teachers}/add',
+        teacher.toJson(),
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
-        body: jsonEncode(teacher.toJson()),
       );
 
       return response.statusCode == 201;
@@ -70,13 +68,12 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<bool> updateTeacher(String id, Teacher teacher) async {
     try {
       final token = await _getToken();
-      final response = await http.put(
-        Uri.parse('${ApiConfig.teachers}/$id'),
+      final response = await ApiClient.put(
+        '${ApiConfig.teachers}/$id',
+        teacher.toJson(),
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
-        body: jsonEncode(teacher.toJson()),
       );
 
       return response.statusCode == 200;
@@ -90,11 +87,10 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<bool> deleteTeacher(String id) async {
     try {
       final token = await _getToken();
-      final response = await http.delete(
-        Uri.parse('${ApiConfig.teachers}/$id'),
+      final response = await ApiClient.delete(
+        '${ApiConfig.teachers}/$id',
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
       );
 
@@ -109,13 +105,12 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<bool> addSalaryRecord(String teacherId, SalaryRecord record) async {
     try {
       final token = await _getToken();
-      final response = await http.post(
-        Uri.parse('${ApiConfig.teachers}/$teacherId/salary'),
+      final response = await ApiClient.post(
+        '${ApiConfig.teachers}/$teacherId/salary',
+        record.toJson(),
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
-        body: jsonEncode(record.toJson()),
       );
       return response.statusCode == 201;
     } catch (e) {
@@ -128,11 +123,10 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<List<SalaryRecord>> getSalaryRecords(String teacherId) async {
     try {
       final token = await _getToken();
-      final response = await http.get(
-        Uri.parse('${ApiConfig.teachers}/$teacherId/salary'),
+      final response = await ApiClient.get(
+        '${ApiConfig.teachers}/$teacherId/salary',
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
       );
       if (response.statusCode == 200) {
@@ -150,13 +144,12 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<bool> applyLeave(String teacherId, LeaveRecord record) async {
     try {
       final token = await _getToken();
-      final response = await http.post(
-        Uri.parse('${ApiConfig.teachers}/$teacherId/leaves'),
+      final response = await ApiClient.post(
+        '${ApiConfig.teachers}/$teacherId/leaves',
+        record.toJson(),
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
-        body: jsonEncode(record.toJson()),
       );
       return response.statusCode == 201;
     } catch (e) {
@@ -169,11 +162,10 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<List<LeaveRecord>> getLeaveRecords(String teacherId) async {
     try {
       final token = await _getToken();
-      final response = await http.get(
-        Uri.parse('${ApiConfig.teachers}/$teacherId/leaves'),
+      final response = await ApiClient.get(
+        '${ApiConfig.teachers}/$teacherId/leaves',
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
       );
       if (response.statusCode == 200) {
@@ -191,13 +183,12 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<bool> updateLeaveStatus(String leaveId, String status) async {
     try {
       final token = await _getToken();
-      final response = await http.put(
-        Uri.parse('${ApiConfig.teachers}/leaves/$leaveId'),
+      final response = await ApiClient.put(
+        '${ApiConfig.teachers}/leaves/$leaveId',
+        {'status': status},
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
-        body: jsonEncode({'status': status}),
       );
       return response.statusCode == 200;
     } catch (e) {

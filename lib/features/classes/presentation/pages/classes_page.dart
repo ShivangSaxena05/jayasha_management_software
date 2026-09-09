@@ -9,6 +9,7 @@ import 'package:collection/collection.dart';
 import 'package:jayasha_childrens_academy/features/staff/domain/repositories/staff_repository.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
 import 'package:jayasha_childrens_academy/features/fees/data/models/fee_structure.dart';
+import 'package:jayasha_childrens_academy/features/fees/domain/repositories/fee_repository.dart';
 
 import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
@@ -27,6 +28,7 @@ class _ClassesPageState extends State<ClassesPage> {
   bool _isInit = true;
   String? _errorMessage;
   List<Teacher> _teachers = [];
+  List<FeeStructure> _allFeeStructures = [];
 
   static const List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -47,14 +49,17 @@ class _ClassesPageState extends State<ClassesPage> {
       final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
       final classRepo = Provider.of<ClassRepository>(context, listen: false);
       final staffRepo = Provider.of<StaffRepository>(context, listen: false);
+      final feeRepo = Provider.of<FeeRepository>(context, listen: false);
 
       final session = await dashboardRepo.getCurrentSession();
       if (session != null && session.id != null) {
         await classRepo.fetchClasses(session.id!);
         final teachers = await staffRepo.getTeachers();
+        final structures = await feeRepo.getFeeStructures();
         if (mounted) {
           setState(() {
             _teachers = teachers;
+            _allFeeStructures = structures.map((json) => FeeStructure.fromJson(json)).toList();
             if (classRepo.classes.isNotEmpty && _selectedClassId == null) {
               _selectedClassId = classRepo.classes.first.id;
             }
@@ -243,7 +248,7 @@ class _ClassesPageState extends State<ClassesPage> {
                       _buildManagementCard(
                         'Fee Structure',
                         Icons.payments_rounded,
-                        currentClass.feeStructure.map((e) => '${e.name}: ₹${e.amount.toInt()}').join('\n'),
+                        _getFeeDisplay(currentClass),
                         Colors.green,
                         () => _showFeeStructureDialog(currentClass),
                       ),
@@ -279,7 +284,7 @@ class _ClassesPageState extends State<ClassesPage> {
                                       final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
                                       final session = await dashboardRepo.getCurrentSession();
                                       if (mounted) {
-                                        PdfGenerator.generateClassTimetable(
+                                        PdfGenerator.downloadClassTimetable(
                                           schoolClass: currentClass,
                                           sessionName: session?.sessionName,
                                         );
@@ -642,9 +647,32 @@ class _ClassesPageState extends State<ClassesPage> {
     });
   }
 
+  String _getFeeDisplay(SchoolClass currentClass) {
+    final structure = _allFeeStructures.firstWhereOrNull((s) => s.classId == currentClass.id);
+    final components = (structure != null && structure.components.isNotEmpty)
+        ? structure.components
+        : currentClass.feeStructure;
+
+    if (components.isEmpty) return 'No fees configured';
+    return components.map((e) => '${e.name}: ₹${e.amount.toInt()}').join('\n');
+  }
+
   void _showFeeStructureDialog(SchoolClass currentClass) {
+    final structure = _allFeeStructures.firstWhereOrNull((s) => s.classId == currentClass.id);
+
+    // Default components if none found
+    final List<FeeComponent> initialComponents = (structure != null && structure.components.isNotEmpty)
+        ? structure.components.map((c) => c.copyWith()).toList()
+        : (currentClass.feeStructure.isNotEmpty
+            ? currentClass.feeStructure.map((c) => c.copyWith()).toList()
+            : [
+                FeeComponent(name: 'Monthly Tuition Fee', amount: 0, frequency: 'monthly'),
+                FeeComponent(name: 'Annual Admission Fee', amount: 0, frequency: 'annually'),
+                FeeComponent(name: 'Examination Fee', amount: 0, frequency: 'annually'),
+              ]);
+
     final Map<String, TextEditingController> controllers = {};
-    for (var component in currentClass.feeStructure) {
+    for (var component in initialComponents) {
       controllers[component.name] = TextEditingController(text: component.amount.toInt().toString());
     }
     bool isSaving = false;
@@ -654,17 +682,19 @@ class _ClassesPageState extends State<ClassesPage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text('Fee Structure - ${currentClass.name}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: controllers.entries.map((e) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: TextField(
-                controller: e.value,
-                decoration: InputDecoration(labelText: e.key, prefixText: '₹ '),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-            )).toList(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: initialComponents.map((component) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextField(
+                  controller: controllers[component.name],
+                  decoration: InputDecoration(labelText: component.name, prefixText: '₹ '),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+              )).toList(),
+            ),
           ),
           actions: [
             TextButton(
@@ -675,13 +705,42 @@ class _ClassesPageState extends State<ClassesPage> {
               onPressed: isSaving ? null : () async {
                 setDialogState(() => isSaving = true);
                 try {
-                  final List<FeeComponent> newFees = currentClass.feeStructure.map((component) {
+                  final feeRepo = Provider.of<FeeRepository>(context, listen: false);
+                  final classRepo = Provider.of<ClassRepository>(context, listen: false);
+                  final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
+
+                  final session = await dashboardRepo.getCurrentSession();
+                  if (session == null) throw Exception('No active session found');
+
+                  final List<FeeComponent> newFees = initialComponents.map((component) {
                     final newAmount = double.tryParse(controllers[component.name]?.text ?? '0') ?? 0.0;
                     return component.copyWith(amount: newAmount);
                   }).toList();
-                  final success = await Provider.of<ClassRepository>(context, listen: false).updateFeeStructure(currentClass.id!, newFees);
-                  if (success && mounted) {
-                    Navigator.pop(context);
+
+                  // 1. Save to FeeStructure collection (Source of Truth)
+                  final feeData = [{
+                    'academicSessionId': session.id,
+                    'classId': currentClass.id,
+                    'components': newFees.map((c) => c.toJson()).toList(),
+                  }];
+
+                  final feeSuccess = await feeRepo.saveFeeStructure(feeData);
+
+                  // 2. Update embedded class structure
+                  final classSuccess = await classRepo.updateFeeStructure(currentClass.id!, newFees);
+
+                  if ((feeSuccess || classSuccess) && mounted) {
+                    // Refresh local structures
+                    final updatedStructures = await feeRepo.getFeeStructures();
+                    if (mounted) {
+                      setState(() {
+                        _allFeeStructures = updatedStructures.map((json) => FeeStructure.fromJson(json)).toList();
+                      });
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Fee structure updated successfully'), backgroundColor: Colors.green),
+                      );
+                    }
                   } else if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Failed to update fee structure')),

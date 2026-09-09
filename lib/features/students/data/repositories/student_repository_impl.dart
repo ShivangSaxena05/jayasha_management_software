@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/students/domain/repositories/student_repository.dart';
+import 'package:jayasha_childrens_academy/services/api_client.dart';
 
 class StudentRepositoryImpl implements StudentRepository {
   static const String _tokenKey = 'auth_token';
@@ -17,13 +17,12 @@ class StudentRepositoryImpl implements StudentRepository {
       print('DEBUG: Sending Admission Data to ${ApiConfig.baseUrl}/students/admission');
       print('DEBUG: Data: ${jsonEncode(admission.toJson())}');
 
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/students/admission'),
+      final response = await ApiClient.post(
+        '${ApiConfig.baseUrl}/students/admission',
+        admission.toJson(),
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode(admission.toJson()),
       );
 
       print('DEBUG: registerAdmission Status Code: ${response.statusCode}');
@@ -59,10 +58,9 @@ class StudentRepositoryImpl implements StudentRepository {
       if (admissionNumber != null) params.add('admissionNumber=$admissionNumber');
       if (params.isNotEmpty) url += '?' + params.join('&');
 
-      final response = await http.get(
-        Uri.parse(url),
+      final response = await ApiClient.get(
+        url,
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
@@ -85,10 +83,9 @@ class StudentRepositoryImpl implements StudentRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/students/$id'),
+      final response = await ApiClient.get(
+        '${ApiConfig.baseUrl}/students/$id',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
@@ -110,13 +107,12 @@ class StudentRepositoryImpl implements StudentRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/students/$id'),
+      final response = await ApiClient.put(
+        '${ApiConfig.baseUrl}/students/$id',
+        admission.toJson(),
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode(admission.toJson()),
       );
 
       final responseData = jsonDecode(response.body);
