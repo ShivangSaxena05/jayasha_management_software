@@ -24,6 +24,9 @@ import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onbo
 import 'package:jayasha_childrens_academy/core/models/principal.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
 
+import 'package:jayasha_childrens_academy/core/utils/app_snackbar.dart';
+import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -82,14 +85,13 @@ class _DashboardPageState extends State<DashboardPage> {
     } catch (e) {
       debugPrint("Error loading dashboard data: $e");
       if (mounted) {
-        final error = e.toString();
-        if (error.contains('401')) {
+        if (e is UnauthorisedException) {
           _handleLogout();
           return;
         }
         setState(() {
           _isLoading = false;
-          _errorMessage = _getHumanReadableError(e);
+          _errorMessage = e.toString();
         });
       }
     }
@@ -100,29 +102,8 @@ class _DashboardPageState extends State<DashboardPage> {
     await prefs.remove('auth_token');
     if (mounted) {
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session expired. Please log in again.')),
-      );
+      AppSnackbar.showError(context, 'Session expired. Please log in again.');
     }
-  }
-
-  String _getHumanReadableError(dynamic e) {
-    String error = e.toString().toLowerCase();
-    if (error.contains('socketexception') ||
-        error.contains('failed host lookup') ||
-        error.contains('errno = 121') ||
-        error.contains('connection refused')) {
-      return 'Unable to connect to the server. Please check if the backend is running at ${ApiConfig.baseUrl} and your device is on the same network.';
-    } else if (error.contains('timeout')) {
-      return 'The connection timed out. Please check your internet connection and try again.';
-    } else if (error.contains('401')) {
-      return 'Your session has expired. Please log in again.';
-    } else if (error.contains('403')) {
-      return 'You do not have permission to view this data.';
-    } else if (error.contains('500')) {
-      return 'Server error. Please contact the administrator or try again later.';
-    }
-    return 'Something went wrong: ${e.toString().split(':').last.trim()}';
   }
 
   @override
@@ -714,6 +695,16 @@ class _DashboardPageState extends State<DashboardPage> {
         );
       }
     }
+  }
+
+  String _getHumanReadableError(dynamic e) {
+    if (e is SocketException || e.toString().contains('SocketException')) {
+      return 'No internet connection. Please check your network and try again.';
+    } else if (e is TimeoutException || e.toString().contains('TimeoutException')) {
+      return 'The connection timed out. Please try again later.';
+    }
+    if (e is AppException) return e.toString();
+    return 'An unexpected error occurred. Please try again.';
   }
 
   @override

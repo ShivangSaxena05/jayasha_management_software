@@ -5,6 +5,8 @@ import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/academic_session.dart';
 import 'package:jayasha_childrens_academy/services/api_client.dart';
 
+import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
+
 class DashboardRepository extends ChangeNotifier {
   Map<String, dynamic> _stats = {};
   Map<String, dynamic> get stats => _stats;
@@ -21,18 +23,13 @@ class DashboardRepository extends ChangeNotifier {
         },
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        _stats = data['data'] ?? {};
-        notifyListeners();
-        return data;
-      } else if (response.statusCode == 401) {
-        throw Exception('401');
-      } else {
-        throw Exception('Failed to load dashboard stats: ${response.statusCode}');
-      }
+      final data = json.decode(response.body);
+      _stats = data['data'] ?? {};
+      notifyListeners();
+      return data;
     } catch (e) {
-      throw Exception('Error connecting to server: $e');
+      if (e is AppException) rethrow;
+      throw FetchDataException('Error connecting to server: $e');
     }
   }
 
@@ -48,13 +45,11 @@ class DashboardRepository extends ChangeNotifier {
         },
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return AcademicSession.fromJson(data);
-      }
-      return null;
+      final data = json.decode(response.body);
+      return AcademicSession.fromJson(data);
     } catch (e) {
       print('Error getting current session: $e');
+      if (e is AppException) rethrow;
       return null;
     }
   }

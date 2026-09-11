@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../core/error/exceptions.dart';
 
 class ApiClient {
   static const Duration timeout = Duration(seconds: 75);
@@ -50,26 +52,41 @@ class ApiClient {
   static Future<http.Response> _request(
     Future<http.Response> Function() request,
   ) async {
-    Exception? lastError;
-
-    // Try twice
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        return await request().timeout(timeout);
-      } on TimeoutException catch (e) {
-        lastError = e;
-        print('ApiClient: Timeout on attempt $attempt');
-      } catch (e) {
-        lastError = Exception(e.toString());
-        print('ApiClient: Error on attempt $attempt: $e');
-      }
-
-      // Small delay before retry
-      if (attempt == 1) {
-        await Future.delayed(const Duration(seconds: 2));
-      }
+    try {
+      final response = await request().timeout(timeout);
+      return _returnResponse(response);
+    } on SocketException {
+      throw NetworkException();
+    } on TimeoutException {
+      throw TimeoutException();
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw FetchDataException(e.toString());
     }
+  }
 
-    throw lastError ?? Exception('Connection failed');
+  static http.Response _returnResponse(http.Response response) {
+    switch (response.statusCode) {
+      case 200:
+      case 201:
+      case 204:
+        return response;
+      case 400:
+        throw BadRequestException(response.body.toString());
+      case 401:
+      case 403:
+        throw UnauthorisedException(response.body.toString());
+      case 404:
+        throw NotFoundException(response.body.toString());
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        throw ServerException('Something went wrong on our end. Please try again later.');
+      default:
+        throw FetchDataException(
+          'Error occured while Communication with Server with StatusCode : ${response.statusCode}',
+        );
+    }
   }
 }

@@ -34,7 +34,7 @@ class _AppSidebarState extends State<AppSidebar> {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 15,
               offset: const Offset(2, 0),
             ),

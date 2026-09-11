@@ -4,12 +4,13 @@ import 'package:collection/collection.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/features/students/domain/repositories/student_repository.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
-import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onboarding_repository.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/repositories/class_repository.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/models/school_class.dart';
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
 import 'package:jayasha_childrens_academy/features/fees/domain/repositories/fee_repository.dart' as fee_domain;
 import 'package:jayasha_childrens_academy/core/models/fee_payment.dart';
+import 'package:jayasha_childrens_academy/core/utils/app_snackbar.dart';
+import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
 
 class AdmissionPage extends StatefulWidget {
   const AdmissionPage({super.key});
@@ -55,7 +56,10 @@ class _AdmissionPageState extends State<AdmissionPage> {
   }
 
   Future<void> _loadInitialData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       final classRepo = Provider.of<ClassRepository>(context, listen: false);
       final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
@@ -83,10 +87,15 @@ class _AdmissionPageState extends State<AdmissionPage> {
       }
     } catch (e) {
       debugPrint('Error loading admission data: $e');
+      setState(() {
+        _errorMessage = e.toString();
+      });
     } finally {
       setState(() => _isLoading = false);
     }
   }
+
+  String? _errorMessage;
 
   Future<void> _loadAdmissionFee() async {
     if (_selectedClassId == null) return;
@@ -190,55 +199,58 @@ class _AdmissionPageState extends State<AdmissionPage> {
       academicSessionId: _currentSessionId!,
     );
 
-    final result = await studentRepo.registerAdmission(admission);
+    try {
+      final result = await studentRepo.registerAdmission(admission);
 
-    if (result['success']) {
-      // Record admission fee payment automatically
-      try {
-        if (_admissionFeeAmount != null && _admissionFeeAmount! > 0) {
-          final studentData = result['data']['data'];
-          final studentId = studentData['_id'];
+      if (result['success']) {
+        // Record admission fee payment automatically
+        try {
+          if (_admissionFeeAmount != null && _admissionFeeAmount! > 0) {
+            final studentData = result['data']['data'];
+            final studentId = studentData['_id'];
 
-          final feeRepo = Provider.of<fee_domain.FeeRepository>(context, listen: false);
-          await feeRepo.recordPayment(FeePayment(
-            studentId: studentId,
-            academicSessionId: _currentSessionId!,
-            amount: _admissionFeeAmount!,
-            date: DateTime.now(),
-            mode: PaymentMode.cash, // Defaulting to cash for admission
-            category: FeeCategory.admission,
-            remarks: 'Admission Fee for ${_firstNameController.text} ${_lastNameController.text}',
-          ));
+            final feeRepo = Provider.of<fee_domain.FeeRepository>(context, listen: false);
+            if (mounted) {
+               await feeRepo.recordPayment(FeePayment(
+                studentId: studentId,
+                academicSessionId: _currentSessionId!,
+                amount: _admissionFeeAmount!,
+                date: DateTime.now(),
+                mode: PaymentMode.cash, // Defaulting to cash for admission
+                category: FeeCategory.admission,
+                remarks: 'Admission Fee for ${_firstNameController.text} ${_lastNameController.text}',
+              ));
+            }
+          }
+        } catch (e) {
+          debugPrint('Error recording automatic admission fee: $e');
+          // We don't fail the whole process if fee recording fails, but maybe alert the user
         }
-      } catch (e) {
-        debugPrint('Error recording automatic admission fee: $e');
-        // We don't fail the whole process if fee recording fails, but maybe alert the user
+
+        setState(() => _isLoading = false);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Student Registered Successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        _resetForm();
+      } else {
+        String errorMsg = result['message'] ?? 'Failed to register student.';
+        // Suggestions for common errors
+        if (errorMsg.contains('admissionNumber')) {
+          errorMsg = "Admission Number already exists. Please use a unique ID.";
+        }
+
+        if (mounted) AppSnackbar.showError(context, errorMsg);
       }
-
-      setState(() => _isLoading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Student Registered Successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      _resetForm();
-    } else {
-      String errorMsg = result['message'] ?? 'Failed to register student.';
-      // Suggestions for common errors
-      if (errorMsg.contains('admissionNumber')) {
-        errorMsg = "Admission Number already exists. Please use a unique ID.";
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMsg),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(label: 'OK', textColor: Colors.white, onPressed: () {}),
-        ),
-      );
+    } catch (e) {
+      if (mounted) AppSnackbar.showError(context, e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -264,6 +276,13 @@ class _AdmissionPageState extends State<AdmissionPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_errorMessage != null) {
+      return ErrorView(
+        message: _errorMessage!,
+        onRetry: _loadInitialData,
+      );
+    }
+
     if (_isLoading && _availableClasses.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }

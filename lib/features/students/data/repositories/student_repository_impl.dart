@@ -4,6 +4,7 @@ import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/students/domain/repositories/student_repository.dart';
 import 'package:jayasha_childrens_academy/services/api_client.dart';
+import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
 
 class StudentRepositoryImpl implements StudentRepository {
   static const String _tokenKey = 'auth_token';
@@ -14,9 +15,6 @@ class StudentRepositoryImpl implements StudentRepository {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      print('DEBUG: Sending Admission Data to ${ApiConfig.baseUrl}/students/admission');
-      print('DEBUG: Data: ${jsonEncode(admission.toJson())}');
-
       final response = await ApiClient.post(
         '${ApiConfig.baseUrl}/students/admission',
         admission.toJson(),
@@ -25,23 +23,14 @@ class StudentRepositoryImpl implements StudentRepository {
         },
       );
 
-      print('DEBUG: registerAdmission Status Code: ${response.statusCode}');
-      print('DEBUG: registerAdmission Response Body: ${response.body}');
-
       final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 201) {
-        return {'success': true, 'data': responseData};
-      } else {
-        return {
-          'success': false,
-          'message': responseData['message'] ?? 'Registration failed',
-          'error': responseData['error']
-        };
-      }
+      return {'success': true, 'data': responseData};
     } catch (e) {
-      print('ERROR in registerAdmission: $e');
-      return {'success': false, 'message': 'Connection error: ${e.toString()}'};
+      if (e is AppException) rethrow;
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
     }
   }
 
@@ -65,14 +54,11 @@ class StudentRepositoryImpl implements StudentRepository {
         },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List<dynamic> studentsJson = data['data'];
-        return studentsJson.map((json) => StudentAdmission.fromJson(json)).toList();
-      }
-      return [];
+      final data = jsonDecode(response.body);
+      final List<dynamic> studentsJson = data['data'];
+      return studentsJson.map((json) => StudentAdmission.fromJson(json)).toList();
     } catch (e) {
-      print('Error in getStudents: $e');
+      if (e is AppException) rethrow;
       return [];
     }
   }
@@ -90,13 +76,10 @@ class StudentRepositoryImpl implements StudentRepository {
         },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return StudentAdmission.fromJson(data['data']);
-      }
-      return null;
+      final data = jsonDecode(response.body);
+      return StudentAdmission.fromJson(data['data']);
     } catch (e) {
-      print('Error in getStudentById: $e');
+      if (e is AppException) rethrow;
       return null;
     }
   }
@@ -116,18 +99,13 @@ class StudentRepositoryImpl implements StudentRepository {
       );
 
       final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        return {'success': true, 'data': responseData};
-      } else {
-        return {
-          'success': false,
-          'message': responseData['message'] ?? 'Update failed',
-        };
-      }
+      return {'success': true, 'data': responseData};
     } catch (e) {
-      print('Error in updateStudent: $e');
-      return {'success': false, 'message': 'Connection error: ${e.toString()}'};
+      if (e is AppException) rethrow;
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
     }
   }
 }

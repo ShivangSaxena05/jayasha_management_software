@@ -6,6 +6,7 @@ import 'package:jayasha_childrens_academy/core/models/salary_record.dart';
 import 'package:jayasha_childrens_academy/core/models/leave_record.dart';
 import 'package:jayasha_childrens_academy/features/staff/domain/repositories/staff_repository.dart';
 import 'package:jayasha_childrens_academy/services/api_client.dart';
+import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
 
 class StaffRepositoryImpl implements StaffRepository {
   static const String _tokenKey = 'auth_token';
@@ -23,7 +24,6 @@ class StaffRepositoryImpl implements StaffRepository {
   Future<List<Teacher>> getTeachers() async {
     try {
       final token = await _getToken();
-      print('Fetching teachers from: ${ApiConfig.teachers}');
       final response = await ApiClient.get(
         ApiConfig.teachers,
         headers: {
@@ -31,16 +31,11 @@ class StaffRepositoryImpl implements StaffRepository {
         },
       );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        _teachers = data.map((json) => Teacher.fromJson(json)).toList();
-        return _teachers;
-      } else {
-        print('Failed to load teachers. Status: ${response.statusCode}');
-        return [];
-      }
+      final List<dynamic> data = jsonDecode(response.body);
+      _teachers = data.map((json) => Teacher.fromJson(json)).toList();
+      return _teachers;
     } catch (e) {
-      print('Error in getTeachers: $e');
+      if (e is AppException) rethrow;
       return [];
     }
   }
@@ -59,7 +54,7 @@ class StaffRepositoryImpl implements StaffRepository {
 
       return response.statusCode == 201;
     } catch (e) {
-      print('Error in addTeacher: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -78,7 +73,7 @@ class StaffRepositoryImpl implements StaffRepository {
 
       return response.statusCode == 200;
     } catch (e) {
-      print('Error in updateTeacher: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -96,7 +91,7 @@ class StaffRepositoryImpl implements StaffRepository {
 
       return response.statusCode == 200;
     } catch (e) {
-      print('Error in deleteTeacher: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -114,7 +109,7 @@ class StaffRepositoryImpl implements StaffRepository {
       );
       return response.statusCode == 201;
     } catch (e) {
-      print('Error in addSalaryRecord: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -129,13 +124,10 @@ class StaffRepositoryImpl implements StaffRepository {
           'Authorization': 'Bearer $token',
         },
       );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => SalaryRecord.fromJson(json)).toList();
-      }
-      return [];
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => SalaryRecord.fromJson(json)).toList();
     } catch (e) {
-      print('Error in getSalaryRecords: $e');
+      if (e is AppException) rethrow;
       return [];
     }
   }
@@ -153,7 +145,7 @@ class StaffRepositoryImpl implements StaffRepository {
       );
       return response.statusCode == 201;
     } catch (e) {
-      print('Error in applyLeave: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -168,13 +160,10 @@ class StaffRepositoryImpl implements StaffRepository {
           'Authorization': 'Bearer $token',
         },
       );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => LeaveRecord.fromJson(json)).toList();
-      }
-      return [];
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => LeaveRecord.fromJson(json)).toList();
     } catch (e) {
-      print('Error in getLeaveRecords: $e');
+      if (e is AppException) rethrow;
       return [];
     }
   }
@@ -192,7 +181,7 @@ class StaffRepositoryImpl implements StaffRepository {
       );
       return response.statusCode == 200;
     } catch (e) {
-      print('Error in updateLeaveStatus: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }

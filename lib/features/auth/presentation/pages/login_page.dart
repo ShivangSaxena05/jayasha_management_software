@@ -5,6 +5,9 @@ import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onbo
 import 'package:jayasha_childrens_academy/features/auth/presentation/pages/onboarding/principal_onboarding_page.dart';
 import 'package:jayasha_childrens_academy/features/dashboard/presentation/pages/dashboard_page.dart';
 
+import 'package:jayasha_childrens_academy/core/utils/app_snackbar.dart';
+import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -26,45 +29,62 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _checkSetupStatus() async {
-    final repo = Provider.of<OnboardingRepository>(context, listen: false);
-    final status = await repo.isSchoolSetup();
-    setState(() {
-      _isSetup = status;
-      _isLoading = false;
-    });
+    try {
+      final repo = Provider.of<OnboardingRepository>(context, listen: false);
+      final status = await repo.isSchoolSetup();
+      setState(() {
+        _isSetup = status;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        AppSnackbar.showError(context, e.toString());
+      }
+    }
   }
 
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      final repo = Provider.of<OnboardingRepository>(context, listen: false);
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+      try {
+        final repo = Provider.of<OnboardingRepository>(context, listen: false);
 
-      if (!_isSetup) {
-        // First time login with hardcoded key
-        if (_keyController.text == '123456') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const PrincipalOnboardingPage()),
-          );
+        if (!_isSetup) {
+          // First time login with hardcoded key
+          if (_keyController.text == '123456') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const PrincipalOnboardingPage()),
+            );
+          } else {
+            setState(() {
+              _errorMessage = 'Invalid Access Key';
+              _isLoading = false;
+            });
+          }
         } else {
-          setState(() {
-            _errorMessage = 'Invalid Access Key';
-            _isLoading = false;
-          });
+          // Second time+ login with security PIN
+          final success = await repo.loginWithPin(_keyController.text);
+          if (success) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const DashboardPage()),
+            );
+          } else {
+            setState(() {
+              _errorMessage = 'Invalid Security PIN';
+              _isLoading = false;
+            });
+          }
         }
-      } else {
-        // Second time+ login with security PIN
-        final success = await repo.loginWithPin(_keyController.text);
-        if (success) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const DashboardPage()),
-          );
-        } else {
-          setState(() {
-            _errorMessage = 'Invalid Security PIN';
-            _isLoading = false;
-          });
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          AppSnackbar.showError(context, e.toString());
         }
       }
     }

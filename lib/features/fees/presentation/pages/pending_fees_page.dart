@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/fees/domain/repositories/fee_repository.dart';
@@ -120,7 +121,11 @@ class _PendingFeesPageState extends State<PendingFeesPage> {
   }
 
   Widget _buildSummaryHeader() {
-    final totalPending = _pendingStudents.fold<double>(0, (sum, item) => sum + (item['pendingAmount'] ?? 0));
+    final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final totalPending = _pendingStudents.fold<double>(
+      0,
+      (sum, item) => sum + (double.tryParse(item['pendingAmount']?.toString() ?? '') ?? 0),
+    );
 
     return Container(
       width: double.infinity,
@@ -134,7 +139,7 @@ class _PendingFeesPageState extends State<PendingFeesPage> {
             children: [
               const Text('Total Outstanding', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
               Text(
-                '₹ $totalPending',
+                formatter.format(totalPending),
                 style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red),
               ),
             ],
@@ -158,6 +163,7 @@ class _PendingFeesPageState extends State<PendingFeesPage> {
   Widget _buildPendingCard(Map<String, dynamic> item) {
     final studentData = item['student'];
     final student = studentData != null ? StudentAdmission.fromJson(studentData) : null;
+    final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -175,7 +181,7 @@ class _PendingFeesPageState extends State<PendingFeesPage> {
                   radius: 24,
                   backgroundColor: AppColors.primary.withOpacity(0.1),
                   child: Text(
-                    item['name']?[0] ?? 'S',
+                    _initialFor(item['name']),
                     style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
                   ),
                 ),
@@ -235,7 +241,7 @@ class _PendingFeesPageState extends State<PendingFeesPage> {
                   children: [
                     const Text('Pending', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                     Text(
-                      '₹ ${item['pendingAmount']}',
+                      formatter.format(double.tryParse(item['pendingAmount']?.toString() ?? '0') ?? 0),
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red),
                     ),
                   ],
@@ -247,7 +253,7 @@ class _PendingFeesPageState extends State<PendingFeesPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Paid: ₹ ${item['paidAmount']} / ₹ ${item['totalExpected']}',
+                  'Paid: ${formatter.format(double.tryParse(item['paidAmount']?.toString() ?? '0') ?? 0)} / ${formatter.format(double.tryParse(item['totalExpected']?.toString() ?? '0') ?? 0)}',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
                 ElevatedButton.icon(
@@ -279,6 +285,11 @@ class _PendingFeesPageState extends State<PendingFeesPage> {
         ),
       ),
     );
+  }
+
+  String _initialFor(dynamic name) {
+    final text = name?.toString().trim() ?? '';
+    return text.isEmpty ? 'S' : text[0].toUpperCase();
   }
 
   String _capitalize(String text) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/core/models/fee_payment.dart';
@@ -49,6 +50,10 @@ void showAddPaymentDialog(BuildContext context, {
 
   final TextEditingController admNoController = TextEditingController(text: prefilledStudent?.admissionNumber);
   final TextEditingController amountController = TextEditingController();
+  final TextEditingController otherCategoryController = TextEditingController();
+  final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  bool dialogClosed = false;
+
   StudentAdmission? foundStudent = prefilledStudent;
   PaymentMode selectedMode = PaymentMode.cash;
   bool _isInitialLoad = true;
@@ -83,88 +88,11 @@ void showAddPaymentDialog(BuildContext context, {
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) {
-        // Fetch student fee status when student is found/changed
-        Future<void> fetchStudentFeeInfo(String studentId) async {
-          try {
-            final status = await feeRepo.getStudentFeeStatus(studentId);
-            final payments = await feeRepo.getStudentPayments(studentId);
-
-            // Extract already paid months for monthly category
-            final paid = payments
-              .where((p) => p.category == FeeCategory.monthly)
-              .expand((p) => p.paidMonths)
-              .toList();
-
-            // Extract applicable months from structure
-            List<String> applicable = [];
-            final classStructure = feeStructures.firstWhereOrNull(
-              (s) => s['class'] != null && (s['class']['_id'] == foundStudent!.currentClassId || s['class'] == foundStudent!.currentClassId),
-            );
-            if (classStructure != null && classStructure['components'] != null) {
-              final monthlyComp = (classStructure['components'] as List).where((c) =>
-                c['name'].toString().toLowerCase().contains('monthly') ||
-                c['name'].toString().toLowerCase().contains('tuition')).firstOrNull;
-              if (monthlyComp != null && monthlyComp['applicableMonths'] != null) {
-                applicable = List<String>.from(monthlyComp['applicableMonths']);
-              }
-            }
-
-            // Determine pending categories (simple version based on total paid vs expected)
-            List<FeeCategory> pending = [];
-            if (classStructure != null && classStructure['components'] != null) {
-              final components = classStructure['components'] as List;
-              final elapsedMonthsList = _getElapsedMonths(currentSession!.startDate);
-
-              for (var comp in components) {
-                String name = comp['name'].toString().toLowerCase();
-                FeeCategory cat = FeeCategory.other;
-                if (name.contains('monthly')) cat = FeeCategory.monthly;
-                else if (name.contains('admission')) cat = FeeCategory.admission;
-                else if (name.contains('exam')) cat = FeeCategory.exam;
-                else if (name.contains('annual')) cat = FeeCategory.annual;
-
-                double expected = 0;
-                if (cat == FeeCategory.monthly) {
-                  final dueMonths = List<String>.from(comp['applicableMonths'] ?? [])
-                      .where((m) => elapsedMonthsList.contains(m)).toList();
-                  expected = (double.tryParse(comp['amount'].toString()) ?? 0) * dueMonths.length;
-                } else {
-                  expected = double.tryParse(comp['amount'].toString()) ?? 0;
-                }
-
-                double paidForCat = payments
-                    .where((p) => p.category == cat)
-                    .fold(0.0, (sum, p) => sum + p.amount);
-
-                if (paidForCat < expected) {
-                  pending.add(cat);
-                }
-              }
-            }
-
-            setDialogState(() {
-              alreadyPaidMonths = paid;
-              applicableMonths = applicable;
-              pendingCategories = pending;
-              // If current category is not pending, switch to first pending one
-              if (pending.isNotEmpty && !pending.contains(selectedCategory)) {
-                selectedCategory = pending.first;
-              }
-            });
-          } catch (e) {
-            debugPrint('Error fetching student fee info: $e');
-          }
-        }
-
-        // Initial fetch if student prefilled
-        if (foundStudent != null && applicableMonths.isEmpty && _isInitialLoad) {
-          _isInitialLoad = false;
-          fetchStudentFeeInfo(foundStudent!.id!);
-        }
-
         // Helper to get base amount from structure
         double getBaseAmount(FeeCategory category) {
           if (foundStudent == null) return 0.0;
+          if (category == FeeCategory.other) return 0.0;
+
           final classStructure = feeStructures.firstWhereOrNull(
             (s) => s['class'] != null && (s['class']['_id'] == foundStudent!.currentClassId || s['class'] == foundStudent!.currentClassId),
           );
@@ -198,7 +126,7 @@ void showAddPaymentDialog(BuildContext context, {
             if (component != null) {
               double unitAmount = double.tryParse(component['amount'].toString()) ?? 0.0;
               if (category == FeeCategory.monthly) {
-                return unitAmount * (selectedMonths.isEmpty ? 1 : selectedMonths.length);
+                return unitAmount * (selectedMonths.isEmpty ? 1 : selectedMonths.length).toDouble();
               }
               return unitAmount;
             }
@@ -207,8 +135,10 @@ void showAddPaymentDialog(BuildContext context, {
         }
 
         void updateAmount() {
+          if (selectedCategory == FeeCategory.other) return;
           if (isFullPayment) {
-            amountController.text = getBaseAmount(selectedCategory).toString();
+            final base = getBaseAmount(selectedCategory);
+            amountController.text = base.toStringAsFixed(0);
           }
         }
 
@@ -216,6 +146,92 @@ void showAddPaymentDialog(BuildContext context, {
         if (foundStudent != null && amountController.text.isEmpty && isFullPayment) {
           updateAmount();
         }
+
+        // Fetch student fee status when student is found/changed
+        Future<void> fetchStudentFeeInfo(String studentId) async {
+          try {
+            final status = await feeRepo.getStudentFeeStatus(studentId);
+
+            // Extract already paid months for monthly category
+            final List<String> paid = [];
+            if (status['payments'] != null) {
+              final paymentsList = status['payments'] as List;
+              for (var p in paymentsList) {
+                final catStr = p['category']?.toString() ?? '';
+                if (catStr == 'monthly' && p['paidMonths'] != null) {
+                  paid.addAll(List<String>.from(p['paidMonths']));
+                }
+              }
+            }
+
+            // Extract applicable months from structure
+            List<String> applicable = [];
+            final classStructure = feeStructures.firstWhereOrNull(
+              (s) => s['class'] != null && (s['class']['_id'] == foundStudent!.currentClassId || s['class'] == foundStudent!.currentClassId),
+            );
+            if (classStructure != null && classStructure['components'] != null) {
+              final monthlyComp = (classStructure['components'] as List).where((c) =>
+                c['name'].toString().toLowerCase().contains('monthly') ||
+                c['name'].toString().toLowerCase().contains('tuition')).firstOrNull;
+              if (monthlyComp != null && monthlyComp['applicableMonths'] != null) {
+                applicable = List<String>.from(monthlyComp['applicableMonths']);
+              }
+            }
+
+            // Determine pending categories from backend status
+            List<FeeCategory> pending = [];
+            if (status['pendingCategories'] != null) {
+              for (var pc in (status['pendingCategories'] as List)) {
+                final catStr = pc['category']?.toString();
+                final cat = FeeCategory.values.firstWhereOrNull((e) => e.name == catStr);
+                if (cat != null) {
+                  // Gate exam category: Only show as pending if there are actually exams scheduled
+                  if (cat == FeeCategory.exam && exams.isEmpty) {
+                    continue;
+                  }
+                  pending.add(cat);
+                }
+              }
+            }
+
+            if (dialogClosed) return;
+            setDialogState(() {
+              alreadyPaidMonths = paid;
+              applicableMonths = applicable;
+              pendingCategories = pending;
+
+              // Ensure selectedCategory is valid (e.g. if prefilled was exam but no exams exist)
+              if (selectedCategory == FeeCategory.exam && exams.isEmpty) {
+                selectedCategory = FeeCategory.monthly;
+              }
+
+              // If current category is not pending, switch to first pending one
+              if (pending.isNotEmpty && !pending.contains(selectedCategory)) {
+                selectedCategory = pending.first;
+              }
+
+              // Auto-select first unpaid month if in monthly category and nothing selected yet
+              if (selectedCategory == FeeCategory.monthly && selectedMonths.isEmpty) {
+                final elapsed = _getElapsedMonths(currentSession!.startDate);
+                final firstUnpaid = applicable.firstWhereOrNull((m) => !paid.contains(m) && elapsed.contains(m));
+                if (firstUnpaid != null) {
+                  selectedMonths.add(firstUnpaid);
+                  updateAmount();
+                }
+              }
+            });
+          } catch (e) {
+            debugPrint('Error fetching student fee info: $e');
+          }
+        }
+
+        // Initial fetch if student prefilled
+        if (foundStudent != null && applicableMonths.isEmpty && _isInitialLoad) {
+          _isInitialLoad = false;
+          fetchStudentFeeInfo(foundStudent!.id!);
+        }
+
+
 
         final totalFee = getBaseAmount(selectedCategory);
         final enteredAmount = double.tryParse(amountController.text) ?? 0.0;
@@ -241,13 +257,17 @@ void showAddPaymentDialog(BuildContext context, {
                           try {
                             final results = await studentRepo.getStudents(admissionNumber: admNoController.text);
                             if (results.isNotEmpty) {
+                              if (dialogClosed) return;
                               setDialogState(() {
                                 foundStudent = results.first;
+                                selectedMonths.clear();
+                                alreadyPaidMonths.clear();
+                                applicableMonths.clear();
                                 updateAmount();
                               });
                               await fetchStudentFeeInfo(foundStudent!.id!);
                             } else {
-                              if (context.mounted) {
+                              if (!dialogClosed && context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('Student not found')),
                                 );
@@ -263,8 +283,12 @@ void showAddPaymentDialog(BuildContext context, {
                       try {
                         final results = await studentRepo.getStudents(admissionNumber: val);
                         if (results.isNotEmpty) {
+                          if (dialogClosed) return;
                           setDialogState(() {
                             foundStudent = results.first;
+                            selectedMonths.clear();
+                            alreadyPaidMonths.clear();
+                            applicableMonths.clear();
                             updateAmount();
                           });
                           await fetchStudentFeeInfo(foundStudent!.id!);
@@ -295,7 +319,11 @@ void showAddPaymentDialog(BuildContext context, {
                     const SizedBox(height: 20),
                     DropdownButtonFormField<FeeCategory>(
                       value: selectedCategory,
-                      items: FeeCategory.values.map((e) {
+                      items: FeeCategory.values.where((cat) {
+                        // Only show exam if there are exams
+                        if (cat == FeeCategory.exam) return exams.isNotEmpty;
+                        return true;
+                      }).map((e) {
                         final isPending = pendingCategories.contains(e);
                         return DropdownMenuItem(
                           value: e,
@@ -312,6 +340,9 @@ void showAddPaymentDialog(BuildContext context, {
                         if (val != null) {
                           setDialogState(() {
                             selectedCategory = val;
+                            if (val == FeeCategory.other) {
+                              amountController.clear();
+                            }
                             updateAmount();
                           });
                         }
@@ -319,6 +350,16 @@ void showAddPaymentDialog(BuildContext context, {
                       decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 16),
+                    if (selectedCategory == FeeCategory.other) ...[
+                      TextField(
+                        controller: otherCategoryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Fee Description (e.g., Uniform, Books)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     if (selectedCategory == FeeCategory.monthly) ...[
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -371,8 +412,43 @@ void showAddPaymentDialog(BuildContext context, {
                             onSelected: isEnabled ? (selected) {
                               setDialogState(() {
                                 if (selected) {
+                                  // Rule: Can only select if all previous applicable months are either paid or selected
+                                  final monthIndex = months.indexOf(m);
+                                  bool allPreviousOk = true;
+                                  for (int i = 0; i < monthIndex; i++) {
+                                    final prevMonth = months[i];
+                                    if (applicableMonths.contains(prevMonth) &&
+                                        !alreadyPaidMonths.contains(prevMonth) &&
+                                        !selectedMonths.contains(prevMonth)) {
+                                      allPreviousOk = false;
+                                      break;
+                                    }
+                                  }
+
+                                  if (!allPreviousOk) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Please select previous unpaid months first'), duration: Duration(seconds: 1)),
+                                    );
+                                    return;
+                                  }
                                   selectedMonths.add(m);
                                 } else {
+                                  // Rule: Can only deselect if no subsequent months are selected
+                                  final monthIndex = months.indexOf(m);
+                                  bool anySubsequentSelected = false;
+                                  for (int i = monthIndex + 1; i < months.length; i++) {
+                                    if (selectedMonths.contains(months[i])) {
+                                      anySubsequentSelected = true;
+                                      break;
+                                    }
+                                  }
+
+                                  if (anySubsequentSelected) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Please deselect subsequent months first'), duration: Duration(seconds: 1)),
+                                    );
+                                    return;
+                                  }
                                   selectedMonths.remove(m);
                                 }
                                 updateAmount();
@@ -398,50 +474,52 @@ void showAddPaymentDialog(BuildContext context, {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    const Text('Payment Option', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            title: const Text('Full'),
-                            value: true,
-                            groupValue: isFullPayment,
-                            onChanged: (val) => setDialogState(() {
-                              isFullPayment = val!;
-                              updateAmount();
-                            }),
+                    if (selectedCategory != FeeCategory.other) ...[
+                      const Text('Payment Option', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<bool>(
+                              title: const Text('Full'),
+                              value: true,
+                              groupValue: isFullPayment,
+                              onChanged: (val) => setDialogState(() {
+                                isFullPayment = val!;
+                                updateAmount();
+                              }),
+                            ),
                           ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            title: const Text('Partial'),
-                            value: false,
-                            groupValue: isFullPayment,
-                            onChanged: (val) => setDialogState(() => isFullPayment = val!),
+                          Expanded(
+                            child: RadioListTile<bool>(
+                              title: const Text('Partial'),
+                              value: false,
+                              groupValue: isFullPayment,
+                              onChanged: (val) => setDialogState(() => isFullPayment = val!),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                     TextField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
-                      readOnly: isFullPayment,
+                      readOnly: isFullPayment && selectedCategory != FeeCategory.other,
                       decoration: InputDecoration(
-                        labelText: isFullPayment ? 'Amount (Calculated)' : 'Enter Amount to Pay',
+                        labelText: (isFullPayment && selectedCategory != FeeCategory.other) ? 'Amount (Calculated)' : 'Enter Amount to Pay',
                         border: const OutlineInputBorder(),
-                        filled: isFullPayment,
-                        fillColor: isFullPayment ? Colors.grey.shade100 : null,
-                        suffixIcon: isFullPayment ? const Icon(Icons.lock_outline, size: 20) : null,
+                        filled: isFullPayment && selectedCategory != FeeCategory.other,
+                        fillColor: (isFullPayment && selectedCategory != FeeCategory.other) ? Colors.grey.shade100 : null,
+                        suffixIcon: (isFullPayment && selectedCategory != FeeCategory.other) ? const Icon(Icons.lock_outline, size: 20) : null,
                       ),
                       onChanged: (val) => setDialogState(() {}),
                     ),
-                    if (!isFullPayment) ...[
+                    if (!isFullPayment && selectedCategory != FeeCategory.other) ...[
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Expected: ₹$totalFee', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                          Text('Difference: ₹${dueAmount.toStringAsFixed(2)}',
+                          Text('Expected: ${formatter.format(totalFee)}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          Text('Difference: ${formatter.format(dueAmount)}',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
@@ -479,10 +557,16 @@ void showAddPaymentDialog(BuildContext context, {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one month')));
                       return;
                     }
+                    if (selectedCategory == FeeCategory.other && otherCategoryController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter fee description')));
+                      return;
+                    }
 
                     String remarks = isFullPayment ? 'Full Payment' : 'Partial Payment';
                     if (selectedCategory == FeeCategory.monthly) {
                       remarks += ' - Months: ${selectedMonths.join(', ')}';
+                    } else if (selectedCategory == FeeCategory.other) {
+                      remarks = 'Other Fee: ${otherCategoryController.text}';
                     }
 
                     final payment = FeePayment(
@@ -506,7 +590,7 @@ void showAddPaymentDialog(BuildContext context, {
                         context: context,
                         builder: (ctx) => AlertDialog(
                           title: const Text('Payment Successful'),
-                          content: Text('₹$amount recorded for ${foundStudent!.name}.'),
+                          content: Text('${formatter.format(amount)} recorded for ${foundStudent!.name}.'),
                           actions: [
                             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
                             ElevatedButton(
@@ -561,22 +645,36 @@ Widget _buildDialogInfoRow(String label, String value, {bool isBold = false, Col
 
 List<String> _getElapsedMonths(String sessionStartDate) {
   try {
-    final start = DateTime.parse(sessionStartDate);
-    final end = DateTime.now();
+    if (sessionStartDate.isEmpty) return [];
+
+    DateTime start;
+    if (sessionStartDate.contains('/')) {
+      // Handle DD/MM/YYYY format
+      start = DateFormat('dd/MM/yyyy').parse(sessionStartDate);
+    } else {
+      // Fallback to ISO format
+      start = DateTime.parse(sessionStartDate);
+    }
+
+    final now = DateTime.now();
     final List<String> elapsed = [];
     final monthNames = [
       "January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"
     ];
 
+    // Normalize dates to first day of the month for comparison
     DateTime current = DateTime(start.year, start.month, 1);
-    DateTime stop = DateTime(end.year, end.month, 1);
+    DateTime stop = DateTime(now.year, now.month, 1);
 
-    int count = 0;
-    while (!current.isAfter(stop) && count < 12) {
+    // If session started in future, no months elapsed yet
+    if (current.isAfter(stop)) return [];
+
+    int safetyCounter = 0;
+    while (!current.isAfter(stop) && safetyCounter < 12) {
       elapsed.add(monthNames[current.month - 1]);
       current = DateTime(current.year, current.month + 1, 1);
-      count++;
+      safetyCounter++;
     }
     return elapsed;
   } catch (e) {

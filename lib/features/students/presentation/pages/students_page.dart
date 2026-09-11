@@ -8,6 +8,9 @@ import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/d
 import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/models/school_class.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
+import 'package:jayasha_childrens_academy/features/settings/data/repositories/school_repository.dart';
+import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
+import 'package:jayasha_childrens_academy/features/certificates/presentation/pages/id_card_editor_page.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -65,19 +68,10 @@ class _StudentsPageState extends State<StudentsPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = _getHumanReadableError(e);
+          _errorMessage = e.toString();
         });
       }
     }
-  }
-
-  String _getHumanReadableError(dynamic e) {
-    if (e is SocketException || e.toString().contains('SocketException')) {
-      return 'No internet connection. Please check your network and try again.';
-    } else if (e is TimeoutException || e.toString().contains('TimeoutException')) {
-      return 'The connection timed out. Please try again later.';
-    }
-    return 'An unexpected error occurred. Please try again.';
   }
 
   Future<void> _fetchStudents() async {
@@ -101,9 +95,66 @@ class _StudentsPageState extends State<StudentsPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = _getHumanReadableError(e);
+          _errorMessage = e.toString();
         });
       }
+    }
+  }
+
+  Future<void> _generateBatchIdCards() async {
+    final filteredStudents = _getFilteredStudents();
+    if (filteredStudents.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
+      final school = schoolRepo.schoolDetails;
+
+      // Default details for batch generation
+      final details = {
+        'schoolName': school?.schoolName ?? 'JAYASHA CHILDREN\'S ACADEMY',
+        'schoolAddress': school?.address ?? '',
+        'schoolNameStyle': {
+          'bold': true,
+          'color': 0xFF0D47A1,
+          'fontSize': 14.0,
+          'align': 'center',
+        },
+        'addressStyle': {
+          'enabled': true,
+          'color': 0xFF666666,
+          'fontSize': 8.0,
+          'align': 'center',
+        },
+        'photoBoxSize': 70.0,
+        'rowSpacing': 3.0,
+        'detailsBlockStyle': {
+          'fontSize': 10.0,
+          'labelFontSize': 7.0,
+          'bold': false,
+          'color': 0xFF000000,
+        },
+      };
+
+      await PdfGenerator.downloadBatchIdCards(
+        students: filteredStudents,
+        details: details,
+        schoolDetails: school,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Batch ID Cards generated successfully'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating batch: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -144,6 +195,18 @@ class _StudentsPageState extends State<StudentsPage> {
                     ),
                   ],
                 ),
+                ElevatedButton.icon(
+                  onPressed: _getFilteredStudents().isEmpty ? null : _generateBatchIdCards,
+                  icon: const Icon(Icons.badge),
+                  label: const Text('Batch ID Cards'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(width: 12),
                 ElevatedButton.icon(
                   onPressed: widget.onRegisterNewStudent,
                   icon: const Icon(Icons.person_add_alt_1_rounded),
@@ -303,7 +366,6 @@ class _StudentsPageState extends State<StudentsPage> {
                                 DataColumn(label: Text('Class')),
                                 DataColumn(label: Text('Section')),
                                 DataColumn(label: Text('Father Name')),
-                                DataColumn(label: Text('Contact')),
                                 DataColumn(label: Text('Actions')),
                               ],
                               rows: _getFilteredStudents().map<DataRow>((student) {
@@ -313,7 +375,6 @@ class _StudentsPageState extends State<StudentsPage> {
                                   DataCell(Text(student.className ?? 'N/A')),
                                   DataCell(Text(student.section ?? 'N/A')),
                                   DataCell(Text(student.fatherName)),
-                                  DataCell(Text(student.guardianPhone)),
                                   DataCell(Row(
                                     children: [
                                       IconButton(
@@ -326,6 +387,19 @@ class _StudentsPageState extends State<StudentsPage> {
                                             ),
                                           );
                                         },
+                                        tooltip: 'View Details',
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.badge_outlined, size: 20, color: Colors.orange),
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => IdCardEditorPage(student: student),
+                                            ),
+                                          );
+                                        },
+                                        tooltip: 'Generate ID Card',
                                       ),
                                     ],
                                   )),

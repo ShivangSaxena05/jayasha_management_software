@@ -6,6 +6,8 @@ import 'package:jayasha_childrens_academy/core/models/fee_payment.dart';
 import 'package:jayasha_childrens_academy/features/fees/domain/repositories/fee_repository.dart';
 import 'package:jayasha_childrens_academy/services/api_client.dart';
 
+import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
+
 class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
   static const String _tokenKey = 'auth_token';
 
@@ -30,6 +32,7 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       return false;
     } catch (e) {
       debugPrint('Error in recordPayment: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -53,6 +56,7 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       return {};
     } catch (e) {
       debugPrint('Error in getStudentFeeStatus: $e');
+      if (e is AppException) rethrow;
       return {};
     }
   }
@@ -74,6 +78,7 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       return response.statusCode == 201;
     } catch (e) {
       debugPrint('Error in saveFeeStructure: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -93,11 +98,15 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.cast<Map<String, dynamic>>();
+        return data
+            .whereType<Map<String, dynamic>>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       }
       return [];
     } catch (e) {
       debugPrint('Error in getFeeStructures: $e');
+      if (e is AppException) rethrow;
       return [];
     }
   }
@@ -117,11 +126,18 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) {
+        return data.whereType<Map<String, dynamic>>().map((json) {
+          DateTime paymentDate;
+          try {
+            paymentDate = DateTime.parse(json['paymentDate'] ?? json['createdAt']);
+          } catch (_) {
+            paymentDate = DateTime.now();
+          }
+
           return {
             'id': json['_id'],
             'amount': double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
-            'date': DateTime.parse(json['paymentDate'] ?? json['createdAt']),
+            'date': paymentDate,
             'paidMonths': List<String>.from(json['paidMonths'] ?? []),
             'mode': PaymentMode.values.where(
               (e) => e.name == (json['paymentMode'] ?? 'cash'),
@@ -139,6 +155,7 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       return [];
     } catch (e) {
       debugPrint('Error in getAllPayments: $e');
+      if (e is AppException) rethrow;
       return [];
     }
   }
@@ -163,6 +180,7 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       return [];
     } catch (e) {
       debugPrint('Error in getStudentPayments: $e');
+      if (e is AppException) rethrow;
       return [];
     }
   }
@@ -186,6 +204,7 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
       return {};
     } catch (e) {
       debugPrint('Error in getFeeStats: $e');
+      if (e is AppException) rethrow;
       return {};
     }
   }
@@ -205,11 +224,15 @@ class FeeRepositoryImpl extends ChangeNotifier implements FeeRepository {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.cast<Map<String, dynamic>>();
+        return data
+            .whereType<Map<String, dynamic>>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       }
       return [];
     } catch (e) {
       debugPrint('Error in getPendingFees: $e');
+      if (e is AppException) rethrow;
       return [];
     }
   }

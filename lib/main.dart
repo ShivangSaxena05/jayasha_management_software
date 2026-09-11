@@ -19,6 +19,7 @@ import 'package:jayasha_childrens_academy/features/staff/data/repositories/staff
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
 import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_repository.dart';
 import 'package:jayasha_childrens_academy/features/settings/data/repositories/school_repository.dart';
+import 'package:jayasha_childrens_academy/core/widgets/offline_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +67,9 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: AppColors.background,
       ),
+      builder: (context, child) {
+        return OfflineBanner(child: child ?? const SizedBox());
+      },
       home: isComplete ? const DashboardPage() : const GreetingPage(),
     );
   }

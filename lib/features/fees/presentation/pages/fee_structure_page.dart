@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:collection/collection.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/repositories/class_repository.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/models/school_class.dart';
@@ -25,6 +26,8 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
     'April', 'May', 'June', 'July', 'August', 'September',
     'October', 'November', 'December', 'January', 'February', 'March'
   ];
+
+  final Map<int, TextEditingController> _controllers = {};
 
   @override
   void initState() {
@@ -74,6 +77,12 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
   void _initializeComponents(SchoolClass? currentClass) {
     if (currentClass == null) return;
 
+    // Clear existing controllers
+    for (var controller in _controllers.values) {
+      controller.dispose();
+    }
+    _controllers.clear();
+
     // Check standalone FeeStructure collection first (Source of Truth)
     final existingStructure = _allFeeStructures.where((s) => s.classId == currentClass.id).firstOrNull;
 
@@ -90,6 +99,14 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
         FeeComponent(name: 'Examination Fee', amount: 0, frequency: 'annually', applicableMonths: []),
       ];
     }
+  }
+
+  @override
+  void dispose() {
+    for (var controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   @override
@@ -317,7 +334,13 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
                         amount: double.tryParse(value) ?? 0,
                       );
                     },
-                    controller: TextEditingController(text: component.amount.toString())..selection = TextSelection.fromPosition(TextPosition(offset: component.amount.toString().length)),
+                    controller: _controllers.putIfAbsent(
+                      index,
+                      () => TextEditingController(text: component.amount.toString().replaceAll('.0', ''))
+                        ..selection = TextSelection.fromPosition(
+                          TextPosition(offset: component.amount.toString().replaceAll('.0', '').length),
+                        ),
+                    ),
                   ),
                 ),
               ],

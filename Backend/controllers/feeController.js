@@ -113,31 +113,53 @@ const getStudentFeeStatus = async (req, res) => {
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     const elapsedMonths = getElapsedMonths(student.academicSession.startDate);
 
-    const paidMonths = payments
-      .filter(p => p.category === 'monthly')
-      .reduce((acc, p) => acc.concat(p.paidMonths || []), []);
+    const paymentMap = {};
+    payments.forEach(p => {
+      if (!paymentMap[p.category]) paymentMap[p.category] = { amount: 0, paidMonths: [] };
+      paymentMap[p.category].amount += p.amount;
+      if (p.paidMonths) paymentMap[p.category].paidMonths.push(...p.paidMonths);
+    });
 
     let totalPayable = 0;
     let pendingMonths = [];
+    let pendingCategories = [];
 
     if (structure) {
       structure.components.forEach(c => {
+        let cat = c.name.toLowerCase();
+        if (cat.includes('monthly')) cat = 'monthly';
+        else if (cat.includes('admission')) cat = 'admission';
+        else if (cat.includes('exam')) cat = 'exam';
+        else if (cat.includes('annual')) cat = 'annual';
+        else cat = 'other';
+
+        const catPayment = paymentMap[cat] || { amount: 0, paidMonths: [] };
+        const paid = catPayment.amount;
+        let expected = 0;
+        let catPendingMonths = [];
+
         if (c.frequency === 'monthly') {
           const dueMonths = c.applicableMonths.filter(m => elapsedMonths.includes(m));
-          totalPayable += (c.amount * dueMonths.length);
-          const unpaid = dueMonths.filter(m => !paidMonths.includes(m));
-          pendingMonths.push(...unpaid);
+          expected = c.amount * dueMonths.length;
+          catPendingMonths = dueMonths.filter(m => !catPayment.paidMonths.includes(m));
+          if (paid >= expected) catPendingMonths = [];
+          pendingMonths.push(...catPendingMonths);
         } else {
-          // Simplistic check for other categories: if any payment exists for that category, assume paid
-          // Real production logic might need more granularity
-          const cat = c.name.toLowerCase().includes('admission') ? 'admission' :
-                      (c.name.toLowerCase().includes('annual') ? 'annual' :
-                      (c.name.toLowerCase().includes('exam') ? 'exam' : 'other'));
+          expected = c.amount;
+        }
 
-          const paidForCat = payments.filter(p => p.category === cat).reduce((sum, p) => sum + p.amount, 0);
-          if (paidForCat < c.amount) {
-            totalPayable += c.amount;
-          }
+        totalPayable += expected;
+
+        if (paid < expected || catPendingMonths.length > 0) {
+          const pending = Math.max(0, expected - paid);
+          pendingCategories.push({
+            category: cat,
+            originalName: c.name,
+            pendingAmount: pending,
+            paidAmount: paid,
+            totalExpected: expected,
+            pendingMonths: catPendingMonths
+          });
         }
       });
     }
@@ -148,6 +170,7 @@ const getStudentFeeStatus = async (req, res) => {
       totalPaid,
       balance: Math.max(0, totalPayable - totalPaid),
       pendingMonths,
+      pendingCategories,
       payments
     });
   } catch (error) {

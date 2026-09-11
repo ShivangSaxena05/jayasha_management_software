@@ -8,6 +8,7 @@ import 'package:jayasha_childrens_academy/core/models/academic_session.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onboarding_repository.dart';
 import 'package:jayasha_childrens_academy/services/api_client.dart';
+import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
 
 class OnboardingRepositoryImpl implements OnboardingRepository {
   static const String _tokenKey = 'auth_token';
@@ -32,6 +33,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       return false;
     } catch (e) {
       print('DEBUG: Error in isSchoolSetup: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -66,6 +68,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       return false;
     } catch (e) {
       print('DEBUG: Error in setupPrincipal: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }
@@ -91,6 +94,7 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       return false;
     } catch (e) {
       print('DEBUG: Error in loginWithPin: $e');
+      if (e is AppException) rethrow;
       return false;
     }
   }

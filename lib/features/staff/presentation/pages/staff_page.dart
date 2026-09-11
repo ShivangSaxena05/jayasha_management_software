@@ -44,19 +44,10 @@ class _StaffPageState extends State<StaffPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = _getHumanReadableError(e);
+          _errorMessage = e.toString();
         });
       }
     }
-  }
-
-  String _getHumanReadableError(dynamic e) {
-    if (e.toString().contains('SocketException')) {
-      return 'No internet connection. Please check your network and try again.';
-    } else if (e.toString().contains('TimeoutException')) {
-      return 'The connection timed out. Please try again later.';
-    }
-    return 'An unexpected error occurred while loading staff data. Please try again.';
   }
 
   @override

@@ -1,9 +1,9 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
@@ -11,6 +11,7 @@ import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/certificates/data/repositories/certificate_repository.dart';
 import 'package:jayasha_childrens_academy/features/settings/data/repositories/school_repository.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
+import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onboarding_repository.dart';
 
 class IdCardEditorPage extends StatefulWidget {
   final StudentAdmission student;
@@ -23,8 +24,10 @@ class IdCardEditorPage extends StatefulWidget {
 }
 
 class _IdCardEditorPageState extends State<IdCardEditorPage> {
-  String _schoolName = 'JAYASHA CHILDREN\'S ACADEMY';
-  String _schoolAddress = 'Shivpuri, Madhya Pradesh';
+  String _schoolName = '';
+  String _schoolAddress = '';
+  String _principalName = 'Principal';
+  String _signatureLabel = 'Principal Signature';
 
   Map<String, dynamic> _schoolNameStyle = {
     'bold': true, 'italic': false, 'underline': false, 'color': 0xFF0D47A1, 'fontSize': 16.0, 'align': 'center',
@@ -40,11 +43,21 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
   String? _cardPhotoOverride;
   double _photoBoxSize = 70.0;
   double _rowSpacing = 3.0;
+  double _watermarkOpacity = 0.05;
+  double _horizontalPadding = 16.0;
+  double _verticalPadding = 8.0;
+
   Map<String, dynamic> _detailsBlockStyle = {
     'fontSize': 10.0,
     'labelFontSize': 7.0,
     'bold': false,
     'color': 0xFF000000,
+  };
+  Map<String, dynamic> _studentNameStyle = {
+    'bold': true, 'italic': false, 'color': 0xFF000000, 'fontSize': 12.0,
+  };
+  Map<String, dynamic> _principalNameStyle = {
+    'bold': true, 'italic': false, 'color': 0xFF000000, 'fontSize': 6.0,
   };
 
   @override
@@ -55,16 +68,47 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     });
   }
 
-  void _initializeData() {
+  void _initializeData() async {
     final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
+    final onboardingRepo = Provider.of<OnboardingRepository>(context, listen: false);
+
+    // 1. Ensure school details are loaded
+    if (schoolRepo.schoolDetails == null) {
+      await schoolRepo.fetchSchoolDetails();
+    }
     final school = schoolRepo.schoolDetails;
+
+    // 2. Fetch principal name for new cards
+    String? fetchedPrincipalName;
+    if (widget.certificateData == null) {
+      final principal = await onboardingRepo.getPrincipalProfileFromServer();
+      if (principal != null) {
+        fetchedPrincipalName = principal.name;
+      }
+    }
+
+    if (!mounted) return;
 
     setState(() {
       if (widget.certificateData != null) {
         _loadCertificateData();
-      } else if (school != null) {
-        _schoolName = school.schoolName;
-        _schoolAddress = school.address;
+      }
+
+      if (fetchedPrincipalName != null) {
+        _principalName = fetchedPrincipalName;
+      }
+
+      // 3. Fallback/Update from school details if values are still empty or default
+      if (school != null) {
+        if (_schoolName.isEmpty || _schoolName == 'JAYASHA CHILDREN\'S ACADEMY') {
+          _schoolName = school.schoolName;
+        }
+        if (_schoolAddress.isEmpty || _schoolAddress == 'Shivpuri, Madhya Pradesh') {
+          _schoolAddress = school.address;
+        }
+        if (_signatureLabel == 'Principal Signature') {
+          _signatureLabel = "Principal";
+        }
       }
     });
   }
@@ -79,7 +123,14 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     _cardPhotoOverride = details['cardPhotoOverride'];
     _photoBoxSize = (details['photoBoxSize'] ?? 70.0).toDouble();
     _rowSpacing = (details['rowSpacing'] ?? 3.0).toDouble();
+    _watermarkOpacity = (details['watermarkOpacity'] ?? 0.05).toDouble();
+    _horizontalPadding = (details['horizontalPadding'] ?? 16.0).toDouble();
+    _verticalPadding = (details['verticalPadding'] ?? 8.0).toDouble();
+    _principalName = details['principalName'] ?? 'Principal';
+    _signatureLabel = details['signatureLabel'] ?? 'Principal Signature';
     _detailsBlockStyle = _mergeStyle(_detailsBlockStyle, details['detailsBlockStyle']);
+    _studentNameStyle = _mergeStyle(_studentNameStyle, details['studentNameStyle']);
+    _principalNameStyle = _mergeStyle(_principalNameStyle, details['principalNameStyle']);
   }
 
   Map<String, dynamic> _mergeStyle(Map<String, dynamic> defaults, dynamic saved) {
@@ -104,7 +155,14 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
       'cardPhotoOverride': _cardPhotoOverride,
       'photoBoxSize': _photoBoxSize,
       'rowSpacing': _rowSpacing,
+      'watermarkOpacity': _watermarkOpacity,
+      'horizontalPadding': _horizontalPadding,
+      'verticalPadding': _verticalPadding,
+      'principalName': _principalName,
+      'signatureLabel': _signatureLabel,
       'detailsBlockStyle': _detailsBlockStyle,
+      'studentNameStyle': _studentNameStyle,
+      'principalNameStyle': _principalNameStyle,
     };
   }
 
@@ -143,13 +201,55 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     }
   }
 
-  void _printCard() {
+  /// Generates the ID card as a PDF and always prompts the user with a
+  /// native "Save As" dialog so they choose the destination each time.
+  Future<void> _printCard() async {
     final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
-    PdfGenerator.printIdCard(
-      student: widget.student,
-      details: _buildDetailsPayload(),
-      schoolDetails: schoolRepo.schoolDetails,
-    );
+
+    try {
+      final fileName = 'ID_Card_${widget.student.admissionNumber}.pdf';
+
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save ID Card As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      // User cancelled the save dialog — do nothing, no error.
+      if (outputFile == null) return;
+
+      setState(() => _isSaving = true);
+
+      await PdfGenerator.downloadIdCard(
+        student: widget.student,
+        details: _buildDetailsPayload(),
+        schoolDetails: schoolRepo.schoolDetails,
+        savePath: outputFile,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ID Card saved to: $outputFile'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving PDF: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   Future<void> _pickAndUploadCardPhoto() async {
@@ -210,10 +310,17 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
         title: Text(widget.certificateData == null ? 'Generate ID Card' : 'Edit ID Card'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: _printCard,
-            tooltip: 'Print ID Card',
+            icon: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.picture_as_pdf),
+            onPressed: _isSaving ? null : _printCard,
+            tooltip: 'Save ID Card as PDF',
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Row(
@@ -251,7 +358,33 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
                     const SizedBox(height: 24),
                     _buildLayoutControls(),
                     const Divider(height: 48),
-                    _buildSectionHeader('Student Details (Read-only)'),
+                    _buildSectionHeader('Signature & Details'),
+                    const SizedBox(height: 16),
+                    _buildStyleableInput(
+                      'Principal Name', (val) => setState(() => _principalName = val), _principalName,
+                      _principalNameStyle, (s) => setState(() => _principalNameStyle = s),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Signature Label', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      onChanged: (val) => setState(() => _signatureLabel = val),
+                      decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                      controller: TextEditingController(text: _signatureLabel)
+                        ..selection = TextSelection.fromPosition(TextPosition(offset: _signatureLabel.length)),
+                    ),
+                    const Divider(height: 48),
+                    _buildSectionHeader('Student Details Styling'),
+                    const SizedBox(height: 16),
+                    const Text('Name Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+                    const SizedBox(height: 8),
+                    _buildStyleControls('Student Name', _studentNameStyle, (s) => setState(() => _studentNameStyle = s)),
+                    const SizedBox(height: 24),
+                    const Text('Other Details Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+                    const SizedBox(height: 8),
+                    _buildStyleControls('Details', _detailsBlockStyle, (s) => setState(() => _detailsBlockStyle = s)),
+                    const Divider(height: 48),
+                    _buildSectionHeader('Student Info (Read-only)'),
                     const SizedBox(height: 16),
                     _buildReadOnlyField('Student Name', widget.student.name),
                     _buildReadOnlyField('Class & Section', '${widget.student.className ?? 'N/A'} - ${widget.student.section ?? 'N/A'}'),
@@ -278,18 +411,21 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
               color: Colors.grey.shade200,
               child: Center(
                 child: SingleChildScrollView(
-                  child: AspectRatio(
-                    aspectRatio: 85.6 / 53.98, // CR80 standard
-                    child: Container(
-                      margin: const EdgeInsets.all(40),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: _buildLivePreview(),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: AspectRatio(
+                      aspectRatio: 85.6 / 53.98, // CR80 standard
+                      child: Container(
+                        margin: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: _buildLivePreview(),
+                        ),
                       ),
                     ),
                   ),
@@ -488,18 +624,30 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Details Block Style', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
-        const SizedBox(height: 8),
-        _buildStyleControls('Details', _detailsBlockStyle, (s) => setState(() => _detailsBlockStyle = s)),
+        const Text('Watermark Opacity', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        Slider(
+          value: _watermarkOpacity,
+          min: 0,
+          max: 0.3,
+          divisions: 30,
+          label: _watermarkOpacity.toStringAsFixed(2),
+          onChanged: (val) => setState(() => _watermarkOpacity = val),
+        ),
         const SizedBox(height: 16),
-        const Text('Label Font Size', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
-        DropdownButton<double>(
-          value: _nearestFontSize((_detailsBlockStyle['labelFontSize'] ?? 7.0).toDouble()),
-          isDense: true,
-          items: _fontSizeOptions.map((s) => DropdownMenuItem(value: s, child: Text('${s.toInt()}px'))).toList(),
-          onChanged: (val) {
-            if (val != null) _updateStyle(_detailsBlockStyle, 'labelFontSize', val, (s) => setState(() => _detailsBlockStyle = s));
-          },
+        const Text('Horizontal Padding', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        Slider(
+          value: _horizontalPadding,
+          min: 0,
+          max: 30,
+          onChanged: (val) => setState(() => _horizontalPadding = val),
+        ),
+        const SizedBox(height: 16),
+        const Text('Vertical Padding', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        Slider(
+          value: _verticalPadding,
+          min: 0,
+          max: 20,
+          onChanged: (val) => setState(() => _verticalPadding = val),
         ),
         const SizedBox(height: 16),
         const Text('Row Spacing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
@@ -511,121 +659,198 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
           label: _rowSpacing.toStringAsFixed(1),
           onChanged: (val) => setState(() => _rowSpacing = val),
         ),
+        const SizedBox(height: 16),
+        const Text('Label Font Size', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textSecondary)),
+        DropdownButton<double>(
+          value: _nearestFontSize((_detailsBlockStyle['labelFontSize'] ?? 7.0).toDouble()),
+          isDense: true,
+          items: _fontSizeOptions.map((s) => DropdownMenuItem(value: s, child: Text('${s.toInt()}px'))).toList(),
+          onChanged: (val) {
+            if (val != null) _updateStyle(_detailsBlockStyle, 'labelFontSize', val, (s) => setState(() => _detailsBlockStyle = s));
+          },
+        ),
       ],
     );
   }
 
   Widget _buildLivePreview() {
     final bool showAddress = (_addressStyle['enabled'] ?? true) as bool;
-    final Color headerColor = Color(_schoolNameStyle['color'] ?? 0xFF0D47A1).withOpacity(0.1);
+    final int schoolColorInt = _schoolNameStyle['color'] ?? 0xFF0D47A1;
+    final Color schoolColor = Color(schoolColorInt);
+    final Color headerColor = schoolColor.withOpacity(0.1);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
+    final school = schoolRepo.schoolDetails;
+    final String? logoUrl = school?.logoUrl;
+
+    return Stack(
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          color: headerColor,
-          child: Column(
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(_schoolName, style: _getPreviewStyle(_schoolNameStyle), textAlign: _getAlign(_schoolNameStyle['align'])),
-              ),
-              if (showAddress)
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(_schoolAddress, style: _getPreviewStyle(_addressStyle), textAlign: _getAlign(_addressStyle['align'])),
-                ),
-            ],
+        // Watermark background
+        Center(
+          child: Opacity(
+            opacity: _watermarkOpacity,
+            child: (logoUrl != null && logoUrl.isNotEmpty)
+                ? Image.network(logoUrl, width: 150)
+                : Icon(Icons.school, size: 150, color: schoolColor),
           ),
         ),
-        const Divider(thickness: 1, height: 0),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                // Photo
-                GestureDetector(
-                  onTap: _pickAndUploadCardPhoto,
-                  child: Container(
-                    width: _photoBoxSize,
-                    height: _photoBoxSize * 1.28, // Maintain aspect ratio roughly 70:90
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Stack(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              decoration: BoxDecoration(
+                color: headerColor,
+                border: Border(bottom: BorderSide(color: schoolColor, width: 2)),
+              ),
+              child: Row(
+                children: [
+                  (logoUrl != null && logoUrl.isNotEmpty)
+                      ? Image.network(logoUrl, height: 28, width: 28)
+                      : Icon(Icons.school, color: schoolColor, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
                       children: [
-                        Positioned.fill(
-                          child: (_cardPhotoOverride != null || (widget.student.photoPath != null && widget.student.photoPath!.isNotEmpty))
-                              ? Image.network(
-                                  _cardPhotoOverride ?? widget.student.photoPath!,
-                                  fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                                  },
-                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 40, color: Colors.grey),
-                                )
-                              : const Icon(Icons.person, size: 40, color: Colors.grey),
+                        FittedBox(
+                          child: Text(_schoolName, style: _getPreviewStyle(_schoolNameStyle), textAlign: _getAlign(_schoolNameStyle['align'])),
                         ),
-                        Positioned(
-                          right: 2,
-                          bottom: 2,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                            child: const Icon(Icons.edit, size: 10, color: Colors.white),
+                        if (showAddress)
+                          FittedBox(
+                            child: Text(_schoolAddress, style: _getPreviewStyle(_addressStyle), textAlign: _getAlign(_addressStyle['align'])),
                           ),
-                        ),
                       ],
                     ),
                   ),
+                ],
+              ),
+            ),
+
+            // Middle section (Photo + Details) - vertically centered
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: _horizontalPadding, vertical: _verticalPadding),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Photo
+                    GestureDetector(
+                      onTap: _pickAndUploadCardPhoto,
+                      child: Container(
+                        width: _photoBoxSize,
+                        height: _photoBoxSize * 1.25,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: schoolColor, width: 2),
+                          borderRadius: BorderRadius.circular(4),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                        ),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: (_cardPhotoOverride != null || (widget.student.photoPath != null && widget.student.photoPath!.isNotEmpty))
+                                  ? Image.network(
+                                      _cardPhotoOverride ?? widget.student.photoPath!,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                      },
+                                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 40, color: Colors.grey),
+                                    )
+                                  : const Icon(Icons.person, size: 40, color: Colors.grey),
+                            ),
+                            Positioned(
+                              right: 2,
+                              bottom: 2,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(color: schoolColor, shape: BoxShape.circle),
+                                child: const Icon(Icons.edit, size: 10, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    // Data
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _cardDataRow('Student Name', widget.student.name, isBold: true, customStyle: _studentNameStyle),
+                          SizedBox(height: _rowSpacing * 2),
+                          Row(
+                            children: [
+                              Expanded(child: _cardDataRow('Class', widget.student.className ?? 'N/A')),
+                              Expanded(child: _cardDataRow('Section', widget.student.section ?? 'N/A')),
+                            ],
+                          ),
+                          SizedBox(height: _rowSpacing * 2),
+                          Row(
+                            children: [
+                              Expanded(child: _cardDataRow('Roll No', widget.student.rollNumber ?? 'N/A')),
+                              Expanded(child: _cardDataRow('Adm No', widget.student.admissionNumber)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                // Data
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
+              ),
+            ),
+
+            // Footer
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.grey.shade300, width: 0.5)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('CARD ID: ID-${widget.student.admissionNumber}', style: const TextStyle(fontSize: 6, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  // Signature
+                  Column(
                     children: [
-                      _cardDataRow('Name', widget.student.name, isBold: true),
-                      SizedBox(height: _rowSpacing),
-                      _cardDataRow('Class', '${widget.student.className ?? 'N/A'} - ${widget.student.section ?? 'N/A'}'),
-                      SizedBox(height: _rowSpacing),
-                      _cardDataRow('Roll No', widget.student.rollNumber ?? 'Not Assigned'),
-                      SizedBox(height: _rowSpacing),
-                      _cardDataRow('Adm No', widget.student.admissionNumber),
+                      Text(_principalName, style: _getPreviewStyle(_principalNameStyle)),
+                      Container(width: 60, height: 0.5, color: Colors.black54),
+                      const SizedBox(height: 2),
+                      Text(_signatureLabel, style: const TextStyle(fontSize: 6, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _cardDataRow(String label, String value, {bool isBold = false}) {
+  Widget _cardDataRow(String label, String value, {bool isBold = false, Map<String, dynamic>? customStyle}) {
+    final style = customStyle ?? _detailsBlockStyle;
     final double labelSize = (_detailsBlockStyle['labelFontSize'] ?? 7.0).toDouble();
-    final double valueSize = (_detailsBlockStyle['fontSize'] ?? 10.0).toDouble();
-    final bool blockBold = _detailsBlockStyle['bold'] == true;
-    final Color textColor = Color(_detailsBlockStyle['color'] ?? 0xFF000000);
+    final double valueSize = (style['fontSize'] ?? 10.0).toDouble();
+    final bool blockBold = style['bold'] == true;
+    final Color textColor = Color(style['color'] ?? 0xFF000000);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label.toUpperCase(), style: TextStyle(fontSize: labelSize, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
         FittedBox(
-          fit: BoxFit.scaleDown,
           child: Text(
             value,
             style: TextStyle(
               fontSize: valueSize,
               fontWeight: (isBold || blockBold) ? FontWeight.bold : FontWeight.w500,
+              fontStyle: style['italic'] == true ? FontStyle.italic : FontStyle.normal,
               color: textColor,
             ),
           ),

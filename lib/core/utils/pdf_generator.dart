@@ -11,7 +11,6 @@ import 'package:jayasha_childrens_academy/core/models/teacher.dart';
 import 'package:jayasha_childrens_academy/core/models/school_details.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/models/school_class.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
 
 class PdfGenerator {
   static Future<pw.Document> _buildCertificatePdf({
@@ -169,7 +168,7 @@ class PdfGenerator {
                             children: [
                               if (details['dateStyle']?['enabled'] ?? true)
                                 pw.Text(
-                                  'Date: ${details['issueDate'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(details['issueDate'])) : DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+                                  'Date: ${details['issueDate'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(details['issueDate'] as String)) : DateFormat('dd/MM/yyyy').format(DateTime.now())}',
                                   style: getStyle(
                                       details['dateStyle'] ?? {'color': 0xFF000000}),
                                   textAlign:
@@ -242,7 +241,7 @@ class PdfGenerator {
     );
   }
 
-  static Future<void> printIdCard({
+  static Future<pw.Document> _buildIdCardPdf({
     required StudentAdmission student,
     required Map<String, dynamic> details,
     SchoolDetails? schoolDetails,
@@ -253,6 +252,31 @@ class PdfGenerator {
     const double cardWidth = 85.6 * PdfPageFormat.mm;
     const double cardHeight = 54.0 * PdfPageFormat.mm;
 
+    final cardWidget = await _buildSingleIdCardWidget(
+      student: student,
+      details: details,
+      schoolDetails: schoolDetails,
+      cardWidth: cardWidth,
+      cardHeight: cardHeight,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: const PdfPageFormat(cardWidth, cardHeight, marginAll: 0),
+        build: (pw.Context context) => cardWidget,
+      ),
+    );
+    return pdf;
+  }
+
+  static Future<pw.Widget> _buildSingleIdCardWidget({
+    required StudentAdmission student,
+    required Map<String, dynamic> details,
+    SchoolDetails? schoolDetails,
+    pw.ImageProvider? logoImage,
+    required double cardWidth,
+    required double cardHeight,
+  }) async {
     final photoPath = details['cardPhotoOverride'] ?? student.photoPath;
     pw.ImageProvider? studentPhoto;
     if (photoPath != null && photoPath.isNotEmpty) {
@@ -263,115 +287,297 @@ class PdfGenerator {
       }
     }
 
-    final double photoBoxSize = (details['photoBoxSize'] ?? 70.0).toDouble();
-    final double rowSpacing = (details['rowSpacing'] ?? 3.0).toDouble();
-    final Map<String, dynamic>? blockStyle = details['detailsBlockStyle'];
-
-    // Simple color selection for PDF header - matching preview opacity (10%)
-    PdfColor pdfHeaderColor = PdfColors.blue50;
-    if (details['schoolNameStyle']?['color'] != null) {
-      final int colorInt = details['schoolNameStyle']['color'];
-      final r = (colorInt >> 16) & 0xFF;
-      final g = (colorInt >> 8) & 0xFF;
-      final b = colorInt & 0xFF;
-      pdfHeaderColor = PdfColor.fromInt((0x1A << 24) | (r << 16) | (g << 8) | b);
+    if (logoImage == null && schoolDetails != null && schoolDetails.logoUrl.isNotEmpty) {
+      try {
+        logoImage = await networkImage(schoolDetails.logoUrl);
+      } catch (e) {
+        debugPrint('Error loading school logo: $e');
+      }
     }
 
-    pdf.addPage(
-      pw.Page(
-        pageFormat: const PdfPageFormat(cardWidth, cardHeight, marginAll: 0),
-        build: (pw.Context context) {
-          return pw.Container(
-            width: cardWidth,
-            height: cardHeight,
-            decoration: pw.BoxDecoration(
-              color: PdfColors.white,
-              border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
+    final double photoBoxSize = (details['photoBoxSize'] ?? 70.0).toDouble();
+    final double rowSpacing = (details['rowSpacing'] ?? 3.0).toDouble();
+    final double watermarkOpacity = (details['watermarkOpacity'] ?? 0.05).toDouble();
+    final double horizontalPadding = (details['horizontalPadding'] ?? 10.0).toDouble();
+    final double verticalPadding = (details['verticalPadding'] ?? 6.0).toDouble();
+    final String principalName = details['principalName'] ?? 'Principal';
+    final String signatureLabel = details['signatureLabel'] ?? 'Principal Signature';
+    final Map<String, dynamic>? blockStyle = details['detailsBlockStyle'];
+    final Map<String, dynamic>? studentNameStyle = details['studentNameStyle'];
+    final Map<String, dynamic>? principalNameStyle = details['principalNameStyle'];
+
+    final int schoolColorInt = details['schoolNameStyle']?['color'] ?? 0xFF0D47A1;
+    final PdfColor schoolColor = PdfColor.fromInt(schoolColorInt);
+
+    // Header background - 10% opacity
+    final r = (schoolColorInt >> 16) & 0xFF;
+    final g = (schoolColorInt >> 8) & 0xFF;
+    final b = schoolColorInt & 0xFF;
+    final PdfColor headerBgColor = PdfColor.fromInt((0x1A << 24) | (r << 16) | (g << 8) | b);
+
+    return pw.Container(
+      width: cardWidth,
+      height: cardHeight,
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
+      ),
+      child: pw.Stack(
+        children: [
+          // Watermark
+          pw.Center(
+            child: pw.Opacity(
+              opacity: watermarkOpacity,
+              child: logoImage != null
+                ? pw.Image(logoImage, width: cardHeight * 0.8)
+                : pw.Icon(const pw.IconData(0xe80c), size: 100, color: schoolColor),
             ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-              children: [
-                pw.Container(
-                  padding:
-                      const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-                  color: pdfHeaderColor,
-                  child: pw.Column(
-                    children: [
-                      pw.Text(
-                        details['schoolName'] ??
-                            schoolDetails?.schoolName ??
-                            'JAYASHA CHILDREN\'S ACADEMY',
-                        textAlign:
-                            _getPdfAlign(details['schoolNameStyle']?['align']),
-                        style: _getPdfStyle(details['schoolNameStyle'], 14),
+          ),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                decoration: pw.BoxDecoration(
+                  color: headerBgColor,
+                  border: pw.Border(bottom: pw.BorderSide(color: schoolColor, width: 1.5)),
+                ),
+                child: pw.Row(
+                  children: [
+                    if (logoImage != null)
+                      pw.Image(logoImage, height: 25, width: 25)
+                    else
+                      pw.Icon(const pw.IconData(0xe80c), color: schoolColor, size: 20),
+                    pw.SizedBox(width: 8),
+                    pw.Expanded(
+                      child: pw.Column(
+                        mainAxisSize: pw.MainAxisSize.min,
+                        children: [
+                          pw.Text(
+                            details['schoolName'] ?? schoolDetails?.schoolName ?? 'JAYASHA CHILDREN\'S ACADEMY',
+                            textAlign: _getPdfAlign(details['schoolNameStyle']?['align']),
+                            style: _getPdfStyle(details['schoolNameStyle'], 12),
+                          ),
+                          if (details['addressStyle']?['enabled'] ?? true)
+                            pw.Text(
+                              details['schoolAddress'] ?? schoolDetails?.address ?? '',
+                              textAlign: _getPdfAlign(details['addressStyle']?['align']),
+                              style: _getPdfStyle(details['addressStyle'], 7),
+                            ),
+                        ],
                       ),
-                      if (details['addressStyle']?['enabled'] ?? true)
-                        pw.Text(
-                          details['schoolAddress'] ??
-                              schoolDetails?.address ??
-                              '',
-                          textAlign:
-                              _getPdfAlign(details['addressStyle']?['align']),
-                          style: _getPdfStyle(details['addressStyle'], 8),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Middle content
+              pw.Expanded(
+                child: pw.Padding(
+                  padding: pw.EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.center,
+                    children: [
+                      // Photo
+                      pw.Container(
+                        width: photoBoxSize,
+                        height: photoBoxSize * 1.25,
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.white,
+                          border: pw.Border.all(color: schoolColor, width: 1.5),
+                          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
                         ),
+                        child: studentPhoto != null
+                            ? pw.Image(studentPhoto, fit: pw.BoxFit.cover)
+                            : pw.Center(
+                                child: _networkIcon(0xe7fd, size: photoBoxSize * 0.4, color: PdfColors.grey500)),
+                      ),
+                      pw.SizedBox(width: 12),
+
+                      // Details
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          mainAxisAlignment: pw.MainAxisAlignment.center,
+                          children: [
+                            _pdfCardDataRow('Student Name', student.name, isBold: true, blockStyle: blockStyle, customStyle: studentNameStyle),
+                            pw.SizedBox(height: rowSpacing * 2),
+                            pw.Row(
+                              children: [
+                                pw.Expanded(child: _pdfCardDataRow('Class', student.className ?? 'N/A', blockStyle: blockStyle)),
+                                pw.Expanded(child: _pdfCardDataRow('Section', student.section ?? 'N/A', blockStyle: blockStyle)),
+                              ],
+                            ),
+                            pw.SizedBox(height: rowSpacing * 2),
+                            pw.Row(
+                              children: [
+                                pw.Expanded(child: _pdfCardDataRow('Roll No', student.rollNumber ?? 'N/A', blockStyle: blockStyle)),
+                                pw.Expanded(child: _pdfCardDataRow('Adm No', student.admissionNumber, blockStyle: blockStyle)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                pw.Divider(thickness: 0.5, color: PdfColors.grey400, height: 0),
-                pw.Expanded(
-                  child: pw.Padding(
-                    padding: const pw.EdgeInsets.all(10),
-                    child: pw.Row(
+              ),
+
+              // Footer
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border(top: pw.BorderSide(color: PdfColors.grey300, width: 0.5)),
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('CARD ID: ID-${student.admissionNumber}', style: pw.TextStyle(fontSize: 5, fontWeight: pw.FontWeight.bold)),
+                    pw.Column(
                       children: [
-                        pw.Container(
-                          width: photoBoxSize,
-                          height: photoBoxSize * 1.28,
-                          decoration: pw.BoxDecoration(
-                            color: PdfColors.grey200,
-                            borderRadius:
-                                const pw.BorderRadius.all(pw.Radius.circular(2)),
-                          ),
-                          child: studentPhoto != null
-                              ? pw.Image(studentPhoto, fit: pw.BoxFit.cover)
-                              : pw.Center(
-                                  child: _networkIcon(0xe7fd, size: photoBoxSize * 0.5, color: PdfColors.grey500)),
-                        ),
-                        pw.SizedBox(width: 12),
-                        pw.Expanded(
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            mainAxisAlignment: pw.MainAxisAlignment.center,
-                            children: [
-                              _pdfCardDataRow('Name', student.name,
-                                  isBold: true, blockStyle: blockStyle),
-                              pw.SizedBox(height: rowSpacing),
-                              _pdfCardDataRow('Class',
-                                  '${student.className ?? 'N/A'} - ${student.section ?? 'N/A'}',
-                                  blockStyle: blockStyle),
-                              pw.SizedBox(height: rowSpacing),
-                              _pdfCardDataRow(
-                                  'Roll No', student.rollNumber ?? 'Not Assigned',
-                                  blockStyle: blockStyle),
-                              pw.SizedBox(height: rowSpacing),
-                              _pdfCardDataRow('Adm No', student.admissionNumber,
-                                  blockStyle: blockStyle),
-                            ],
-                          ),
-                        ),
+                        pw.Text(principalName, style: _getPdfStyle(principalNameStyle, 6)),
+                        pw.Container(width: 45, height: 0.5, color: PdfColors.black),
+                        pw.SizedBox(height: 1),
+                        pw.Text(signatureLabel, style: pw.TextStyle(fontSize: 5, fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
+              ),
+            ],
+          ),
+        ],
       ),
     );
+  }
 
+
+  static Future<void> printIdCard({
+    required StudentAdmission student,
+    required Map<String, dynamic> details,
+    SchoolDetails? schoolDetails,
+  }) async {
+    final pdf = await _buildIdCardPdf(
+        student: student, details: details, schoolDetails: schoolDetails);
     await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save());
   }
+
+  static Future<void> downloadIdCard({
+    required StudentAdmission student,
+    required Map<String, dynamic> details,
+    SchoolDetails? schoolDetails,
+    String? savePath,
+  }) async {
+    final pdf = await _buildIdCardPdf(
+        student: student, details: details, schoolDetails: schoolDetails);
+    final bytes = await pdf.save();
+
+    if (savePath != null) {
+      final file = File(savePath);
+      await file.writeAsBytes(bytes);
+      return;
+    }
+
+    final fileName = 'ID_Card_${student.admissionNumber}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save ID Card As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
+  }
+
+  static Future<void> downloadBatchIdCards({
+    required List<StudentAdmission> students,
+    required Map<String, dynamic> details,
+    SchoolDetails? schoolDetails,
+  }) async {
+    final pdf = pw.Document();
+
+    // Standard A4 page can fit 8-10 cards (CR80)
+    // We'll go with 2 columns and 4 rows per page (8 cards) to leave good margins.
+    const double cardWidth = 85.6 * PdfPageFormat.mm;
+    const double cardHeight = 54.0 * PdfPageFormat.mm;
+
+    pw.ImageProvider? logoImage;
+    if (schoolDetails != null && schoolDetails.logoUrl.isNotEmpty) {
+      try {
+        logoImage = await networkImage(schoolDetails.logoUrl);
+      } catch (e) {
+        debugPrint('Error loading school logo: $e');
+      }
+    }
+
+    // Process in chunks of 8
+    for (var i = 0; i < students.length; i += 8) {
+      final chunk = students.sublist(i, i + 8 > students.length ? students.length : i + 8);
+
+      final List<pw.Widget> cardWidgets = [];
+      for (var student in chunk) {
+        cardWidgets.add(await _buildSingleIdCardWidget(
+          student: student,
+          details: details,
+          schoolDetails: schoolDetails,
+          logoImage: logoImage,
+          cardWidth: cardWidth,
+          cardHeight: cardHeight,
+        ));
+      }
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(10 * PdfPageFormat.mm),
+          build: (context) {
+            return pw.Wrap(
+              spacing: 10 * PdfPageFormat.mm,
+              runSpacing: 10 * PdfPageFormat.mm,
+              children: cardWidgets,
+            );
+          },
+        ),
+      );
+    }
+
+    final bytes = await pdf.save();
+    final fileName = 'Batch_ID_Cards_${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Batch ID Cards As',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (outputFile != null) {
+        final file = File(outputFile);
+        await file.writeAsBytes(bytes);
+      }
+    } else {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    }
+  }
+
 
   static pw.TextStyle _getPdfStyle(
       Map<String, dynamic>? style, double defaultSize) {
@@ -403,12 +609,15 @@ class PdfGenerator {
   }
 
   static pw.Widget _pdfCardDataRow(String label, String value,
-      {bool isBold = false, Map<String, dynamic>? blockStyle}) {
+      {bool isBold = false,
+      Map<String, dynamic>? blockStyle,
+      Map<String, dynamic>? customStyle}) {
+    final Map<String, dynamic>? style = customStyle ?? blockStyle;
     final double labelSize = (blockStyle?['labelFontSize'] ?? 7.0).toDouble();
-    final double valueSize = (blockStyle?['fontSize'] ?? 10.0).toDouble();
-    final bool blockBold = blockStyle?['bold'] == true;
-    final PdfColor textColor = blockStyle?['color'] != null
-        ? PdfColor.fromInt(blockStyle!['color'])
+    final double valueSize = (style?['fontSize'] ?? 10.0).toDouble();
+    final bool blockBold = style?['bold'] == true;
+    final PdfColor textColor = style?['color'] != null
+        ? PdfColor.fromInt(style!['color'])
         : PdfColors.black;
 
     return pw.Column(
@@ -425,8 +634,12 @@ class PdfGenerator {
               style: pw.TextStyle(
                   fontSize: valueSize,
                   color: textColor,
-                  fontWeight:
-                      (isBold || blockBold) ? pw.FontWeight.bold : pw.FontWeight.normal)),
+                  fontWeight: (isBold || blockBold)
+                      ? pw.FontWeight.bold
+                      : pw.FontWeight.normal,
+                  fontStyle: style?['italic'] == true
+                      ? pw.FontStyle.italic
+                      : pw.FontStyle.normal)),
         ),
       ],
     );

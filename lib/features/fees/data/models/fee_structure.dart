@@ -16,10 +16,12 @@ class FeeComponent {
 
   factory FeeComponent.fromJson(Map<String, dynamic> json) {
     return FeeComponent(
-      name: json['name'] ?? '',
+      name: json['name']?.toString() ?? '',
       amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
-      frequency: json['frequency'] ?? 'monthly',
-      applicableMonths: List<String>.from(json['applicableMonths'] ?? []),
+      frequency: json['frequency']?.toString() ?? 'monthly',
+      applicableMonths: (json['applicableMonths'] as List?)
+          ?.map((e) => e.toString())
+          .toList() ?? [],
     );
   }
 
@@ -61,12 +63,15 @@ class FeeStructure {
   });
 
   factory FeeStructure.fromJson(Map<String, dynamic> json) {
+    final rawSession = json['academicSession'];
+    final rawClass = json['class'];
     return FeeStructure(
-      id: json['_id'],
-      academicSessionId: json['academicSession'] is Map ? json['academicSession']['_id'] : json['academicSession'],
-      classId: json['class'] is Map ? json['class']['_id'] : json['class'],
+      id: json['_id']?.toString(),
+      academicSessionId: (rawSession is Map ? rawSession['_id'] : rawSession)?.toString() ?? '',
+      classId: (rawClass is Map ? rawClass['_id'] : rawClass)?.toString() ?? '',
       components: (json['components'] as List?)
-          ?.map((c) => FeeComponent.fromJson(c))
+          ?.whereType<Map<String, dynamic>>()
+          .map((c) => FeeComponent.fromJson(c))
           .toList() ?? [],
     );
   }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/services/api_client.dart';
+import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
 
 class ExamRepository {
   Future<Map<String, dynamic>> createExam(Map<String, dynamic> examData) async {
@@ -19,6 +20,7 @@ class ExamRepository {
 
       return jsonDecode(response.body);
     } catch (e) {
+      if (e is AppException) rethrow;
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -38,6 +40,7 @@ class ExamRepository {
 
       return jsonDecode(response.body);
     } catch (e) {
+      if (e is AppException) rethrow;
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -63,6 +66,7 @@ class ExamRepository {
 
       return jsonDecode(response.body);
     } catch (e) {
+      if (e is AppException) rethrow;
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -79,21 +83,14 @@ class ExamRepository {
         },
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (response.body.isEmpty) return {'success': true};
-        try {
-          return jsonDecode(response.body);
-        } catch (_) {
-          return {'success': true};
-        }
-      } else {
-        return {
-          'success': false,
-          'message': 'Server error: ${response.statusCode}',
-          'body': response.body
-        };
+      if (response.body.isEmpty) return {'success': true};
+      try {
+        return jsonDecode(response.body);
+      } catch (_) {
+        return {'success': true};
       }
     } catch (e) {
+      if (e is AppException) rethrow;
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -112,6 +109,7 @@ class ExamRepository {
 
       return jsonDecode(response.body);
     } catch (e) {
+      if (e is AppException) rethrow;
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -139,6 +137,7 @@ class ExamRepository {
 
       return jsonDecode(response.body);
     } catch (e) {
+      if (e is AppException) rethrow;
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -157,6 +156,7 @@ class ExamRepository {
 
       return jsonDecode(response.body);
     } catch (e) {
+      if (e is AppException) rethrow;
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -175,6 +175,7 @@ class ExamRepository {
 
       return jsonDecode(response.body);
     } catch (e) {
+      if (e is AppException) rethrow;
       return {'success': false, 'message': e.toString()};
     }
   }
