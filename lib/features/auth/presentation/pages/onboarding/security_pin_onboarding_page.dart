@@ -19,72 +19,87 @@ class _SecurityPinOnboardingPageState extends State<SecurityPinOnboardingPage> {
   bool _isPinVisible = false;
   bool _isLoading = false;
 
+  String _getHumanReadableError(dynamic e) {
+    final error = e.toString().toLowerCase();
+    if (error.contains('socketexception') ||
+        error.contains('connection failed') ||
+        error.contains('os error 7')) {
+      return "No internet connection. Please connect to the internet and try again.";
+    }
+    if (error.contains('timeout')) {
+      return "Connection timed out. Please try again.";
+    }
+    return "Setup failed: $e";
+  }
+
   void _finish() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      final repo = Provider.of<OnboardingRepository>(context, listen: false);
+      try {
+        final repo = Provider.of<OnboardingRepository>(context, listen: false);
 
-      final principalDetails = await repo.getPrincipalDetails();
-      if (principalDetails == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Principal details missing. Please go back.")),
+        final principalDetails = await repo.getPrincipalDetails();
+        if (principalDetails == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Principal details missing. Please go back.")),
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        final success = await repo.setupPrincipal(
+          name: principalDetails.name,
+          securityPin: _pinController.text,
+          principalDetails: principalDetails,
         );
-        setState(() => _isLoading = false);
-        return;
-      }
 
-      final success = await repo.setupPrincipal(
-        name: principalDetails.name,
-        securityPin: _pinController.text,
-        principalDetails: principalDetails,
-      );
-
-      if (success) {
-        // Sync previously saved local data (teachers/session) to server now that we have a token
-        if (mounted) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => const Center(
-              child: Card(
-                child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 24),
-                      Text(
-                        "Finalizing Setup...",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 8),
-                      Text("Synchronizing your school data with the server."),
-                    ],
+        if (success) {
+          // Sync previously saved local data (teachers/session) to server now that we have a token
+          if (mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const Center(
+                child: Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 24),
+                        Text(
+                          "Finalizing Setup...",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 8),
+                        Text("Synchronizing your school data with the server."),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
+            );
+          }
+
+          await repo.syncOnboardingData();
+
+          if (mounted) {
+            // Pop the loading dialog
+            Navigator.of(context).pop();
+
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const DashboardPage()),
+            );
+          }
         }
-
-        await repo.syncOnboardingData();
-
-        if (mounted) {
-          // Pop the loading dialog
-          Navigator.of(context).pop();
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const DashboardPage()),
-          );
-        }
-      } else {
+      } catch (e) {
         setState(() => _isLoading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Setup failed. Please check your connection.")),
+            SnackBar(content: Text(_getHumanReadableError(e))),
           );
         }
       }

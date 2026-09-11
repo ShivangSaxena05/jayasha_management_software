@@ -5,6 +5,7 @@ import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
 import 'package:jayasha_childrens_academy/features/classes/data/repositories/class_repository.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
+import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
 import 'package:intl/intl.dart';
 
 class ExamsPage extends StatefulWidget {
@@ -23,6 +24,7 @@ class _ExamsPageState extends State<ExamsPage> {
   List<Map<String, dynamic>> _tempDatesheet = [];
   bool _isEditingDatesheet = false;
   String? _currentSessionName;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -45,10 +47,16 @@ class _ExamsPageState extends State<ExamsPage> {
         setState(() {
           _exams = examsRes['data'] ?? [];
           _classes = classes;
+          _errorMessage = null;
         });
       }
     } catch (e) {
       debugPrint('Error loading exam data: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = _getHumanReadableError(e);
+        });
+      }
     } finally {
       setState(() => _isLoading = false);
     }
@@ -68,9 +76,14 @@ class _ExamsPageState extends State<ExamsPage> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _selectedExam == null
-                    ? _buildExamsList()
-                    : _buildDatesheetView(),
+                : _errorMessage != null
+                    ? ErrorView(
+                        message: _errorMessage!,
+                        onRetry: _loadInitialData,
+                      )
+                    : _selectedExam == null
+                        ? _buildExamsList()
+                        : _buildDatesheetView(),
           ),
         ],
       ),
@@ -382,7 +395,16 @@ class _ExamsPageState extends State<ExamsPage> {
     } catch (e) {
       debugPrint('Error saving datesheet: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        String errorMsg = 'An unexpected error occurred while saving datesheet.';
+        if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+          errorMsg = 'No internet connection. Please check your network and try again.';
+        } else if (e.toString().contains('TimeoutException')) {
+          errorMsg = 'The connection timed out. Please try again later.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: Colors.red,
+        ));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -717,7 +739,7 @@ class _ExamsPageState extends State<ExamsPage> {
     } catch (e) {
       debugPrint('Error downloading datesheet: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating PDF: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating PDF: ${_getHumanReadableError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -749,11 +771,20 @@ class _ExamsPageState extends State<ExamsPage> {
     } catch (e) {
       debugPrint('Error downloading all datesheets: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating PDF: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error generating PDF: ${_getHumanReadableError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _getHumanReadableError(dynamic e) {
+    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+      return 'No internet connection. Please connect to the internet and try again.';
+    } else if (e.toString().contains('TimeoutException')) {
+      return 'The connection timed out. Please try again later.';
+    }
+    return 'An unexpected error occurred: $e';
   }
 
 }

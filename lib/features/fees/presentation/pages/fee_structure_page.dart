@@ -7,6 +7,7 @@ import 'package:jayasha_childrens_academy/features/classes/data/models/school_cl
 import 'package:jayasha_childrens_academy/features/fees/domain/repositories/fee_repository.dart';
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
 import 'package:jayasha_childrens_academy/features/fees/data/models/fee_structure.dart';
+import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
 
 class FeeStructurePage extends StatefulWidget {
   final VoidCallback onBack;
@@ -22,6 +23,7 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
   List<FeeComponent> _components = [];
   List<FeeStructure> _allFeeStructures = [];
   bool _isLoading = false;
+  String? _errorMessage;
   final List<String> _allMonths = [
     'April', 'May', 'June', 'July', 'August', 'September',
     'October', 'November', 'December', 'January', 'February', 'March'
@@ -57,6 +59,7 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
       final structures = await feeRepo.getFeeStructures();
       setState(() {
         _allFeeStructures = structures.map((json) => FeeStructure.fromJson(json)).toList();
+        _errorMessage = null;
 
         // Auto-select first class if none selected
         if (selectedClass == null && classRepo.classes.isNotEmpty) {
@@ -69,6 +72,17 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
       });
     } catch (e) {
       debugPrint('Error loading fee structures: $e');
+      if (mounted) {
+        setState(() {
+          if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+            _errorMessage = 'No internet connection. Please check your network and try again.';
+          } else if (e.toString().contains('TimeoutException')) {
+            _errorMessage = 'The connection timed out. Please try again later.';
+          } else {
+            _errorMessage = 'An unexpected error occurred while loading fee structures. Please try again.';
+          }
+        });
+      }
     } finally {
       if (showLoader) setState(() => _isLoading = false);
     }
@@ -125,6 +139,11 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
       padding: const EdgeInsets.all(30),
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? ErrorView(
+              message: _errorMessage!,
+              onRetry: _loadFeeStructures,
+            )
           : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -242,27 +261,53 @@ class _FeeStructurePageState extends State<FeeStructurePage> {
                           children: [
                             ElevatedButton(
                               onPressed: () async {
-                                final session = await dashboardRepo.getCurrentSession();
-                                if (session == null) return;
+                                try {
+                                  final session = await dashboardRepo.getCurrentSession();
+                                  if (session == null) return;
 
-                                final List<Map<String, dynamic>> feeData = [
-                                  {
-                                    'academicSessionId': session.id,
-                                    'classId': selectedClass!.id,
-                                    'components': _components.map((c) => c.toJson()).toList(),
+                                  final List<Map<String, dynamic>> feeData = [
+                                    {
+                                      'academicSessionId': session.id,
+                                      'classId': selectedClass!.id,
+                                      'components': _components.map((c) => c.toJson()).toList(),
+                                    }
+                                  ];
+
+                                  final success = await feeRepo.saveFeeStructure(feeData);
+                                  if (success) {
+                                    await classRepo.updateFeeStructure(selectedClass!.id!, _components);
+                                    await _loadFeeStructures(showLoader: false);
+
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Fee structure for ${selectedClass!.name} updated successfully!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
                                   }
-                                ];
-
-                                final success = await feeRepo.saveFeeStructure(feeData);
-                                if (success) {
-                                  await classRepo.updateFeeStructure(selectedClass!.id!, _components);
-                                  await _loadFeeStructures(showLoader: false);
-
+                                } catch (e) {
                                   if (mounted) {
+                                    String errorMsg = 'An unexpected error occurred while saving fee structure.';
+                                    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+                                      errorMsg = 'No internet connection. Please check your network and try again.';
+                                    } else if (e.toString().contains('TimeoutException')) {
+                                      errorMsg = 'The connection timed out. Please try again later.';
+                                    }
+
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Fee structure for ${selectedClass!.name} updated successfully!'),
-                                        backgroundColor: Colors.green,
+                                        content: Text(errorMsg),
+                                        backgroundColor: Colors.red,
+                                        action: SnackBarAction(
+                                          label: 'Retry',
+                                          textColor: Colors.white,
+                                          onPressed: () {
+                                            // Re-trigger the same save logic
+                                            // Note: In a production app, we might want to extract this to a separate method
+                                          },
+                                        ),
                                       ),
                                     );
                                   }

@@ -68,10 +68,17 @@ class _StudentsPageState extends State<StudentsPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = e.toString();
+          _errorMessage = _getHumanReadableError(e);
         });
       }
     }
+  }
+
+  String _getHumanReadableError(dynamic e) {
+    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+      return 'No internet connection. Please connect to the internet and try again.';
+    }
+    return 'An unexpected error occurred: $e';
   }
 
   Future<void> _fetchStudents() async {
@@ -95,7 +102,7 @@ class _StudentsPageState extends State<StudentsPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = e.toString();
+          _errorMessage = _getHumanReadableError(e);
         });
       }
     }
@@ -150,7 +157,7 @@ class _StudentsPageState extends State<StudentsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating batch: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error generating batch: ${_getHumanReadableError(e)}'), backgroundColor: Colors.red),
         );
       }
     } finally {

@@ -44,10 +44,17 @@ class _StaffPageState extends State<StaffPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = e.toString();
+          _errorMessage = _getHumanReadableError(e);
         });
       }
     }
+  }
+
+  String _getHumanReadableError(dynamic e) {
+    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    return 'Failed to load staff data. Please try again.';
   }
 
   @override

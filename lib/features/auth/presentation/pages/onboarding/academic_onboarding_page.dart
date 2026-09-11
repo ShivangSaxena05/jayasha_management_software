@@ -20,6 +20,7 @@ class _AcademicOnboardingPageState extends State<AcademicOnboardingPage> {
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
   final _repository = OnboardingRepositoryImpl();
+  bool _isLoading = false;
 
   final List<String> _availableClasses = [
     'Pre-KG', 'LKG', 'UKG',
@@ -112,24 +113,45 @@ class _AcademicOnboardingPageState extends State<AcademicOnboardingPage> {
 
   Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
-      final session = AcademicSession(
-        sessionName: _sessionNameController.text,
-        startDate: _startDateController.text,
-        endDate: _endDateController.text,
-        classes: _selectedClasses.entries.map((e) => SchoolClass(
-          className: e.key,
-          sections: e.value,
-        )).toList(),
-      );
-      await _repository.saveAcademicSession(session);
-
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const TeacherOnboardingPage()),
+      setState(() => _isLoading = true);
+      try {
+        final session = AcademicSession(
+          sessionName: _sessionNameController.text,
+          startDate: _startDateController.text,
+          endDate: _endDateController.text,
+          classes: _selectedClasses.entries.map((e) => SchoolClass(
+            className: e.key,
+            sections: e.value,
+          )).toList(),
         );
+        await _repository.saveAcademicSession(session);
+
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const TeacherOnboardingPage()),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_getHumanReadableError(e)),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
     }
+  }
+
+  String _getHumanReadableError(dynamic e) {
+    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+      return 'No internet connection. Please connect to the internet and try again.';
+    }
+    return 'An unexpected error occurred: $e';
   }
 
   @override
@@ -190,11 +212,25 @@ class _AcademicOnboardingPageState extends State<AcademicOnboardingPage> {
                         style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                       ),
                       TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const TeacherOnboardingPage()),
+                        onPressed: () async {
+                          // Create a default academic session if skipped
+                          final now = DateTime.now();
+                          final defaultSession = AcademicSession(
+                            sessionName: "${now.year}-${now.year + 1}",
+                            startDate: "01/04/${now.year}",
+                            endDate: "31/03/${now.year + 1}",
+                            classes: [
+                              SchoolClass(className: 'Class 1', sections: ['A']),
+                            ],
                           );
+                          await _repository.saveAcademicSession(defaultSession);
+
+                          if (mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const TeacherOnboardingPage()),
+                            );
+                          }
                         },
                         child: const Text("Skip for now"),
                       ),
@@ -352,17 +388,19 @@ class _AcademicOnboardingPageState extends State<AcademicOnboardingPage> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
-                          onPressed: _submit,
+                          onPressed: _isLoading ? null : _submit,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 20),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: const Text(
-                            "Continue to Teacher Setup",
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
+                          child: _isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                              "Continue to Teacher Setup",
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
                         ),
                       ),
                     ],

@@ -18,6 +18,7 @@ class CertificatesPage extends StatefulWidget {
 class _CertificatesPageState extends State<CertificatesPage> {
   List<dynamic> _recentCertificates = [];
   bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -26,7 +27,10 @@ class _CertificatesPageState extends State<CertificatesPage> {
   }
 
   Future<void> _loadRecentCertificates() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       final certRepo = Provider.of<CertificateRepository>(context, listen: false);
       final response = await certRepo.getRecentCertificates();
@@ -37,9 +41,19 @@ class _CertificatesPageState extends State<CertificatesPage> {
       }
     } catch (e) {
       debugPrint('Error loading recent certificates: $e');
+      setState(() {
+        _errorMessage = _getHumanReadableError(e);
+      });
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  String _getHumanReadableError(dynamic e) {
+    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+      return 'No internet connection. Please connect to the internet and try again.';
+    }
+    return 'Failed to load certificates. Please try again later.';
   }
 
   void _navigateToEditor({Map<String, dynamic>? cert}) async {
@@ -119,9 +133,25 @@ class _CertificatesPageState extends State<CertificatesPage> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _recentCertificates.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
+                : _errorMessage != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+                            const SizedBox(height: 16),
+                            Text(_errorMessage!, textAlign: TextAlign.center),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _loadRecentCertificates,
+                              child: const Text('Try Again'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _recentCertificates.isEmpty
+                        ? _buildEmptyState()
+                        : ListView.builder(
                         itemCount: _recentCertificates.length,
                         itemBuilder: (context, index) {
                           final cert = _recentCertificates[index];

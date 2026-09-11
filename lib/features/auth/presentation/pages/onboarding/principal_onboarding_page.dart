@@ -51,6 +51,20 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
   final _formKey3 = GlobalKey<FormState>();
 
   final _repository = OnboardingRepositoryImpl();
+  bool _isLoading = false;
+
+  String _getHumanReadableError(dynamic e) {
+    final error = e.toString().toLowerCase();
+    if (error.contains('socketexception') ||
+        error.contains('connection failed') ||
+        error.contains('os error 7')) {
+      return "No internet connection. Please connect to the internet and try again.";
+    }
+    if (error.contains('timeout')) {
+      return "Connection timed out. Please try again.";
+    }
+    return "Error saving details: $e";
+  }
 
   @override
   void initState() {
@@ -152,7 +166,7 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Error saving details: $e")),
+              SnackBar(content: Text(_getHumanReadableError(e))),
             );
           }
         } finally {
@@ -161,8 +175,6 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
       }
     }
   }
-
-  bool _isLoading = false;
 
   void _previousPage() {
     if (_currentPage > 0) {
@@ -273,11 +285,27 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
                         style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                       ),
                       TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const AcademicOnboardingPage()),
+                        onPressed: () async {
+                          // Create empty/placeholder principal data
+                          final placeholderPrincipal = Principal(
+                            name: "School Administrator",
+                            dob: "01/01/1980",
+                            gender: "Other",
+                            email: "admin@school.com",
+                            phone: "0000000000",
+                            address: "School Campus",
+                            qualification: "Not Provided",
+                            experience: "Not Provided",
+                            maritalStatus: "Single",
                           );
+                          await _repository.savePrincipalDetails(placeholderPrincipal);
+
+                          if (mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const AcademicOnboardingPage()),
+                            );
+                          }
                         },
                         child: const Text("Skip for now"),
                       ),

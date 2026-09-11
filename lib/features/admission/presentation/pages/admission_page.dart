@@ -88,7 +88,13 @@ class _AdmissionPageState extends State<AdmissionPage> {
     } catch (e) {
       debugPrint('Error loading admission data: $e');
       setState(() {
-        _errorMessage = e.toString();
+        if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+          _errorMessage = 'No internet connection. Please check your network and try again.';
+        } else if (e.toString().contains('TimeoutException')) {
+          _errorMessage = 'The connection timed out. Please try again later.';
+        } else {
+          _errorMessage = 'An unexpected error occurred while loading admission data. Please try again.';
+        }
       });
     } finally {
       setState(() => _isLoading = false);

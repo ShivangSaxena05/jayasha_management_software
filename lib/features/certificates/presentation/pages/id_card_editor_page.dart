@@ -69,48 +69,59 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
   }
 
   void _initializeData() async {
-    final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
-    final onboardingRepo = Provider.of<OnboardingRepository>(context, listen: false);
+    try {
+      final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
+      final onboardingRepo = Provider.of<OnboardingRepository>(context, listen: false);
 
-    // 1. Ensure school details are loaded
-    if (schoolRepo.schoolDetails == null) {
-      await schoolRepo.fetchSchoolDetails();
+      // 1. Ensure school details are loaded
+      if (schoolRepo.schoolDetails == null) {
+        await schoolRepo.fetchSchoolDetails();
+      }
+      final school = schoolRepo.schoolDetails;
+
+      // 2. Fetch principal name for new cards
+      String? fetchedPrincipalName;
+      if (widget.certificateData == null) {
+        final principal = await onboardingRepo.getPrincipalProfileFromServer();
+        if (principal != null) {
+          fetchedPrincipalName = principal.name;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        if (widget.certificateData != null) {
+          _loadCertificateData();
+        }
+
+        if (fetchedPrincipalName != null) {
+          _principalName = fetchedPrincipalName;
+        }
+
+        // 3. Fallback/Update from school details if values are still empty or default
+        if (school != null) {
+          if (_schoolName.isEmpty || _schoolName == 'JAYASHA CHILDREN\'S ACADEMY') {
+            _schoolName = school.schoolName;
+          }
+          if (_schoolAddress.isEmpty || _schoolAddress == 'Shivpuri, Madhya Pradesh') {
+            _schoolAddress = school.address;
+          }
+          if (_signatureLabel == 'Principal Signature') {
+            _signatureLabel = "Principal";
+          }
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_getHumanReadableError(e)),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-    final school = schoolRepo.schoolDetails;
-
-    // 2. Fetch principal name for new cards
-    String? fetchedPrincipalName;
-    if (widget.certificateData == null) {
-      final principal = await onboardingRepo.getPrincipalProfileFromServer();
-      if (principal != null) {
-        fetchedPrincipalName = principal.name;
-      }
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      if (widget.certificateData != null) {
-        _loadCertificateData();
-      }
-
-      if (fetchedPrincipalName != null) {
-        _principalName = fetchedPrincipalName;
-      }
-
-      // 3. Fallback/Update from school details if values are still empty or default
-      if (school != null) {
-        if (_schoolName.isEmpty || _schoolName == 'JAYASHA CHILDREN\'S ACADEMY') {
-          _schoolName = school.schoolName;
-        }
-        if (_schoolAddress.isEmpty || _schoolAddress == 'Shivpuri, Madhya Pradesh') {
-          _schoolAddress = school.address;
-        }
-        if (_signatureLabel == 'Principal Signature') {
-          _signatureLabel = "Principal";
-        }
-      }
-    });
   }
 
   void _loadCertificateData() {
@@ -195,10 +206,22 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${response['message']}'), backgroundColor: Colors.red));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_getHumanReadableError(e)),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       setState(() => _isSaving = false);
     }
+  }
+
+  String _getHumanReadableError(dynamic e) {
+    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    return 'An unexpected error occurred: $e';
   }
 
   /// Generates the ID card as a PDF and always prompts the user with a
@@ -244,7 +267,7 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving PDF: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error saving PDF: ${_getHumanReadableError(e)}'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -295,7 +318,10 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(_getHumanReadableError(e)),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       setState(() => _isSaving = false);

@@ -92,8 +92,8 @@ class _FeesPageState extends State<FeesPage> {
   }
 
   String _getHumanReadableError(dynamic e) {
-    if (e.toString().contains('SocketException')) {
-      return 'No internet connection. Please check your network and try again.';
+    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+      return 'No internet connection. Please connect to the internet and try again.';
     } else if (e.toString().contains('TimeoutException')) {
       return 'The connection timed out. Please try again later.';
     }
@@ -392,7 +392,7 @@ class _FeesPageState extends State<FeesPage> {
                             debugPrint('Error downloading receipt: $e');
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Failed to generate receipt')),
+                                SnackBar(content: Text('Failed to generate receipt: ${_getHumanReadableError(e)}')),
                               );
                             }
                           }
@@ -417,6 +417,11 @@ class _FeesPageState extends State<FeesPage> {
                               }
                             } catch (e) {
                               debugPrint('Error navigating to student detail: $e');
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to load student: ${_getHumanReadableError(e)}')),
+                                );
+                              }
                             }
                           }
                         },

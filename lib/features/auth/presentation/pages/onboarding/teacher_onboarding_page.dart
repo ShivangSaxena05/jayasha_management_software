@@ -19,6 +19,20 @@ class TeacherOnboardingPage extends StatefulWidget {
 class _TeacherOnboardingPageState extends State<TeacherOnboardingPage> {
   final List<Teacher> _teachers = [];
   final _repository = OnboardingRepositoryImpl();
+  bool _isSaving = false;
+
+  String _getHumanReadableError(dynamic e) {
+    final error = e.toString().toLowerCase();
+    if (error.contains('socketexception') ||
+        error.contains('connection failed') ||
+        error.contains('os error 7')) {
+      return "No internet connection. Please connect to the internet and try again.";
+    }
+    if (error.contains('timeout')) {
+      return "Connection timed out. Please try again.";
+    }
+    return "An error occurred: $e";
+  }
 
   void _showAddTeacherDialog() {
     showDialog(
@@ -48,13 +62,24 @@ class _TeacherOnboardingPageState extends State<TeacherOnboardingPage> {
       return;
     }
 
-    await _repository.saveTeachersDetails(_teachers);
+    setState(() => _isSaving = true);
+    try {
+      await _repository.saveTeachersDetails(_teachers);
 
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const FeeStructureOnboardingPage()),
-      );
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const FeeStructureOnboardingPage()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getHumanReadableError(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -116,11 +141,16 @@ class _TeacherOnboardingPageState extends State<TeacherOnboardingPage> {
                         style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                       ),
                       TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const FeeStructureOnboardingPage()),
-                          );
+                        onPressed: () async {
+                          // No teachers added, just proceed
+                          await _repository.saveTeachersDetails([]);
+
+                          if (mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const FeeStructureOnboardingPage()),
+                            );
+                          }
                         },
                         child: const Text("Skip for now"),
                       ),
@@ -217,14 +247,16 @@ class _TeacherOnboardingPageState extends State<TeacherOnboardingPage> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
-                          onPressed: _finishOnboarding,
+                          onPressed: _isSaving ? null : _finishOnboarding,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 20),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: const Text("Finalize & Setup Fees", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          child: _isSaving
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text("Finalize & Setup Fees", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
@@ -252,6 +284,19 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
   final int _totalPages = 3;
   bool _isLoading = false;
   final _repository = OnboardingRepositoryImpl();
+
+  String _getHumanReadableError(dynamic e) {
+    final error = e.toString().toLowerCase();
+    if (error.contains('socketexception') ||
+        error.contains('connection failed') ||
+        error.contains('os error 7')) {
+      return "No internet connection. Please connect to the internet and try again.";
+    }
+    if (error.contains('timeout')) {
+      return "Connection timed out. Please try again.";
+    }
+    return "An error occurred: $e";
+  }
 
   final _formKey1 = GlobalKey<FormState>();
   final _formKey2 = GlobalKey<FormState>();
@@ -312,6 +357,11 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
       }
     } catch (e) {
       debugPrint("Error loading academic data: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getHumanReadableError(e))),
+        );
+      }
     } finally {
       setState(() => _isLoading = false);
     }
@@ -886,6 +936,13 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
       }
     } catch (e) {
       debugPrint("Error uploading teacher files: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getHumanReadableError(e))),
+        );
+        setState(() => _isLoading = false);
+        return; // Don't proceed if upload fails due to network
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

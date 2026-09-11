@@ -16,8 +16,22 @@ class FeeStructureOnboardingPage extends StatefulWidget {
 class _FeeStructureOnboardingPageState extends State<FeeStructureOnboardingPage> {
   final _repository = OnboardingRepositoryImpl();
   bool _isLoading = true;
+  bool _isSaving = false;
   List<String> _classes = [];
   final Map<String, Map<String, TextEditingController>> _feeControllers = {};
+
+  String _getHumanReadableError(dynamic e) {
+    final error = e.toString().toLowerCase();
+    if (error.contains('socketexception') ||
+        error.contains('connection failed') ||
+        error.contains('os error 7')) {
+      return "No internet connection. Please connect to the internet and try again.";
+    }
+    if (error.contains('timeout')) {
+      return "Connection timed out. Please try again.";
+    }
+    return "An error occurred: $e";
+  }
 
   @override
   void initState() {
@@ -43,6 +57,11 @@ class _FeeStructureOnboardingPageState extends State<FeeStructureOnboardingPage>
       }
     } catch (e) {
       debugPrint("Error loading academic data: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getHumanReadableError(e))),
+        );
+      }
     } finally {
       setState(() => _isLoading = false);
     }
@@ -68,14 +87,25 @@ class _FeeStructureOnboardingPageState extends State<FeeStructureOnboardingPage>
       };
     });
 
-    final repo = OnboardingRepositoryImpl();
-    await repo.saveFeeStructure(feeData);
+    setState(() => _isSaving = true);
+    try {
+      final repo = OnboardingRepositoryImpl();
+      await repo.saveFeeStructure(feeData);
 
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const SecurityPinOnboardingPage()),
-      );
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SecurityPinOnboardingPage()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getHumanReadableError(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -137,7 +167,17 @@ class _FeeStructureOnboardingPageState extends State<FeeStructureOnboardingPage>
                         style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                       ),
                       TextButton(
-                        onPressed: _finish,
+                        onPressed: () async {
+                          // Save empty fee structure if skipped
+                          await _repository.saveFeeStructure({});
+
+                          if (mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const SecurityPinOnboardingPage()),
+                            );
+                          }
+                        },
                         child: const Text("Skip for now"),
                       ),
                     ],
@@ -234,17 +274,19 @@ class _FeeStructureOnboardingPageState extends State<FeeStructureOnboardingPage>
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
-                          onPressed: _finish,
+                          onPressed: _isSaving ? null : _finish,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 20),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: const Text(
-                            "Continue to Security Setup",
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
+                          child: _isSaving
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text(
+                                "Continue to Security Setup",
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
                         ),
                       ),
                     ],

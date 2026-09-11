@@ -42,6 +42,19 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
   late TextEditingController _addressController;
   String? _selectedGender;
 
+  String _getHumanReadableError(dynamic e) {
+    final error = e.toString().toLowerCase();
+    if (error.contains('socketexception') ||
+        error.contains('connection failed') ||
+        error.contains('os error 7')) {
+      return "No internet connection. Please connect to the internet and try again.";
+    }
+    if (error.contains('timeout')) {
+      return "Connection timed out. Please try again.";
+    }
+    return "An error occurred: $e";
+  }
+
   @override
   void initState() {
     super.initState();
@@ -121,7 +134,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
     } catch (e) {
       debugPrint('Error updating profile: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error updating profile'), backgroundColor: Colors.red),
+        SnackBar(content: Text(_getHumanReadableError(e)), backgroundColor: Colors.red),
       );
     } finally {
       setState(() => _isSaving = false);
@@ -142,7 +155,12 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
       }
     } catch (e) {
       debugPrint('Error fetching fee history: $e');
-      if (mounted) setState(() => _isLoadingFees = false);
+      if (mounted) {
+        setState(() => _isLoadingFees = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getHumanReadableError(e))),
+        );
+      }
     }
   }
 
@@ -355,14 +373,22 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
           IconButton(
             icon: const Icon(Icons.download_outlined, size: 20, color: AppColors.primary),
             onPressed: () async {
-              final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
-              final session = await dashboardRepo.getCurrentSession();
-              if (context.mounted) {
-                await PdfGenerator.downloadFeeReceipt(
-                  student: widget.student,
-                  payment: payment,
-                  sessionName: session?.sessionName ?? 'Current Session',
-                );
+              try {
+                final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
+                final session = await dashboardRepo.getCurrentSession();
+                if (context.mounted) {
+                  await PdfGenerator.downloadFeeReceipt(
+                    student: widget.student,
+                    payment: payment,
+                    sessionName: session?.sessionName ?? 'Current Session',
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(_getHumanReadableError(e)), backgroundColor: Colors.red),
+                  );
+                }
               }
             },
             tooltip: 'Download Receipt',
