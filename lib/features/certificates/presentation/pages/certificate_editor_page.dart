@@ -77,7 +77,7 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
     super.initState();
     final school = Provider.of<SchoolRepository>(context, listen: false).schoolDetails;
     _schoolName = school?.schoolName ?? 'JAYASHA CHILDREN\'S ACADEMY';
-    _subtitle = school?.affiliationLine ?? 'Affiliated to CBSE, New Delhi';
+    _subtitle = school?.affiliationLine ?? 'Affiliated to UP Board';
     _principalLabel = school?.principalSignatureLabel ?? 'Principal Signature';
 
     if (widget.certificateData != null) {
@@ -103,7 +103,7 @@ class _CertificateEditorPageState extends State<CertificateEditorPage> {
     _bodyController.text = details['body'] ?? '';
 
     _schoolName = details['schoolName'] ?? 'JAYASHA CHILDREN\'S ACADEMY';
-    _subtitle = details['subtitle'] ?? 'Affiliated to CBSE, New Delhi';
+    _subtitle = details['subtitle'] ?? 'Affiliated to UP Board';
     _place = details['place'] ?? 'School Office';
     _principalLabel = details['principalLabel'] ?? 'Principal Signature';
 

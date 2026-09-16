@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:jayasha_childrens_academy/core/models/principal.dart';
@@ -37,9 +38,9 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
   final _addressController = TextEditingController();
   String _maritalStatus = 'Married';
 
-  File? _imageFile;
-  File? _aadhaarFrontFile;
-  File? _aadhaarBackFile;
+  dynamic _imageFile;
+  dynamic _aadhaarFrontFile;
+  dynamic _aadhaarBackFile;
   String? _existingPhotoUrl;
   String? _existingAadhaarFrontUrl;
   String? _existingAadhaarBackUrl;
@@ -114,13 +115,13 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
           String? aadhaarBackUrl = _existingAadhaarBackUrl;
 
           if (_imageFile != null) {
-            photoUrl = await _repository.uploadFile(_imageFile!.path, 'principal_photo');
+            photoUrl = await _repository.uploadFile(_imageFile, 'principal_photo');
           }
           if (_aadhaarFrontFile != null) {
-            aadhaarFrontUrl = await _repository.uploadFile(_aadhaarFrontFile!.path, 'principal_aadhaar_front');
+            aadhaarFrontUrl = await _repository.uploadFile(_aadhaarFrontFile, 'principal_aadhaar_front');
           }
           if (_aadhaarBackFile != null) {
-            aadhaarBackUrl = await _repository.uploadFile(_aadhaarBackFile!.path, 'principal_aadhaar_back');
+            aadhaarBackUrl = await _repository.uploadFile(_aadhaarBackFile, 'principal_aadhaar_back');
           }
 
           // Save Principal Data with URLs
@@ -214,11 +215,11 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
       if (pickedFile != null) {
         setState(() {
           if (isProfile) {
-            _imageFile = File(pickedFile.path);
+            _imageFile = pickedFile;
           } else if (isFront) {
-            _aadhaarFrontFile = File(pickedFile.path);
+            _aadhaarFrontFile = pickedFile;
           } else {
-            _aadhaarBackFile = File(pickedFile.path);
+            _aadhaarBackFile = pickedFile;
           }
         });
       }
@@ -405,7 +406,9 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
                   radius: 60,
                   backgroundColor: Colors.grey.shade200,
                   backgroundImage: _imageFile != null
-                      ? FileImage(_imageFile!)
+                      ? (kIsWeb
+                          ? NetworkImage(_imageFile.path)
+                          : NetworkImage(_imageFile.path))
                       : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null),
                   child: (_imageFile == null && _existingPhotoUrl == null)
                       ? const Icon(Icons.person, size: 60, color: Colors.grey)
@@ -565,7 +568,7 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
     );
   }
 
-  Widget _buildAadhaarPicker(String label, File? file, String? existingUrl, VoidCallback onTap) {
+  Widget _buildAadhaarPicker(String label, dynamic file, String? existingUrl, VoidCallback onTap) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -585,7 +588,7 @@ class _PrincipalOnboardingPageState extends State<PrincipalOnboardingPage> {
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: file != null
-                        ? Image.file(file, fit: BoxFit.cover)
+                        ? Image.network(file.path, fit: BoxFit.cover)
                         : Image.network(existingUrl!, fit: BoxFit.cover),
                   )
                 : Column(

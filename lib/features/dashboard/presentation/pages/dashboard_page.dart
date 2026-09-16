@@ -1,6 +1,8 @@
-import 'dart:io';
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:io' as io;
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/widgets/app_sidebar.dart';
@@ -26,6 +28,7 @@ import 'package:jayasha_childrens_academy/core/models/teacher.dart';
 
 import 'package:jayasha_childrens_academy/core/utils/app_snackbar.dart';
 import 'package:jayasha_childrens_academy/core/error/exceptions.dart';
+import 'package:jayasha_childrens_academy/core/utils/platform_utils.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -108,12 +111,22 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDesktop = PlatformUtils.isDesktop(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
         centerTitle: true,
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        leading: isDesktop
+            ? null
+            : Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
         automaticallyImplyLeading: false,
         actions: [
           if (_principal != null)
@@ -124,23 +137,40 @@ class _DashboardPageState extends State<DashboardPage> {
                 backgroundImage: _principal!.photoPath != null
                     ? (_principal!.photoPath!.startsWith('http')
                         ? NetworkImage(_principal!.photoPath!)
-                        : FileImage(File(_principal!.photoPath!)) as ImageProvider)
+                        : (kIsWeb
+                            ? NetworkImage(_principal!.photoPath!) // On web, local paths don't work same way
+                            : FileImage(io.File(_principal!.photoPath!)) as ImageProvider))
                     : null,
                 child: _principal!.photoPath == null ? const Icon(Icons.person, color: AppColors.primary) : null,
               ),
             ),
         ],
       ),
+      drawer: isDesktop
+          ? null
+          : Drawer(
+              child: AppSidebar(
+                selectedIndex: _selectedIndex,
+                onItemSelected: (index) {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                  Navigator.pop(context);
+                },
+                isDrawer: true,
+              ),
+            ),
       body: Row(
         children: [
-          AppSidebar(
-            selectedIndex: _selectedIndex,
-            onItemSelected: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-          ),
+          if (isDesktop)
+            AppSidebar(
+              selectedIndex: _selectedIndex,
+              onItemSelected: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+            ),
           // Content Area
           Expanded(
             child: Container(
@@ -248,19 +278,20 @@ class _DashboardPageState extends State<DashboardPage> {
     final expectedCollection = (counts['expectedCollection'] ?? 0).toDouble();
 
     final recentAdmissions = stats['recentStudents'] as List? ?? [];
+    final bool isDesktop = PlatformUtils.isDesktop(context);
 
     return RefreshIndicator(
       onRefresh: _loadOnboardingData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(30),
+        padding: EdgeInsets.all(isDesktop ? 30 : 16),
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Welcome back, ${_principal?.name ?? "Administrator"}',
-            style: const TextStyle(
-              fontSize: 24,
+            style: TextStyle(
+              fontSize: isDesktop ? 24 : 20,
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
             ),
@@ -293,7 +324,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Quick Search: Student Name or Roll No...',
+                      hintText: isDesktop ? 'Quick Search: Student Name or Roll No...' : 'Search Students...',
                       border: InputBorder.none,
                       hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.6)),
                       suffixIcon: _searchController.text.isNotEmpty
@@ -311,16 +342,17 @@ class _DashboardPageState extends State<DashboardPage> {
                     onSubmitted: (value) => _performSearch(value),
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: () => _performSearch(_searchController.text),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                if (isDesktop)
+                  ElevatedButton(
+                    onPressed: () => _performSearch(_searchController.text),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Search'),
                   ),
-                  child: const Text('Search'),
-                ),
               ],
             ),
           ),
@@ -362,76 +394,89 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           ),
           const SizedBox(height: 40),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 2,
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+          if (isDesktop)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: _buildRecentAdmissionsTable(recentAdmissions),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Recent Admissions',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      if (recentAdmissions.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Center(
-                            child: Text(
-                              'No recent admissions found',
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                          ),
-                        )
-                      else
-                        ...recentAdmissions.map((student) {
-                          return Column(
-                            children: [
-                              _buildRecentAdmissionRow(
-                                student['name'] ?? 'Unknown',
-                                student['currentClass']?['name'] ?? student['section'] ?? 'N/A',
-                                student['admissionDate'] != null
-                                  ? DateTime.parse(student['admissionDate']).toString().split(' ')[0]
-                                  : 'N/A',
-                              ),
-                              const Divider(),
-                            ],
-                          );
-                        }),
-                      const SizedBox(height: 10),
-                      TextButton(
-                        onPressed: () => setState(() => _selectedIndex = 2),
-                        child: const Text('View All Students'),
-                      ),
+                      _buildNoticeBox(),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildNoticeBox(),
-                  ],
-                ),
-              ),
-            ],
-          ),
+              ],
+            )
+          else
+            Column(
+              children: [
+                _buildRecentAdmissionsTable(recentAdmissions),
+                const SizedBox(height: 20),
+                _buildNoticeBox(),
+              ],
+            ),
         ],
       ),
     ),
+    );
+  }
+
+  Widget _buildRecentAdmissionsTable(List recentAdmissions) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Recent Admissions',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (recentAdmissions.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(
+                  'No recent admissions found',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            )
+          else
+            ...recentAdmissions.map((student) {
+              return Column(
+                children: [
+                  _buildRecentAdmissionRow(
+                    student['name'] ?? 'Unknown',
+                    student['currentClass']?['name'] ?? student['section'] ?? 'N/A',
+                    student['admissionDate'] != null
+                      ? DateTime.parse(student['admissionDate']).toString().split(' ')[0]
+                      : 'N/A',
+                  ),
+                  const Divider(),
+                ],
+              );
+            }),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => setState(() => _selectedIndex = 2),
+            child: const Text('View All Students'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -698,9 +743,9 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   String _getHumanReadableError(dynamic e) {
-    if (e is SocketException || e.toString().contains('SocketException')) {
+    if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
       return 'No internet connection. Please check your network and try again.';
-    } else if (e is TimeoutException || e.toString().contains('TimeoutException')) {
+    } else if (e.toString().contains('TimeoutException')) {
       return 'The connection timed out. Please try again later.';
     }
     if (e is AppException) return e.toString();

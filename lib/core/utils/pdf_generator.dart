@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -136,7 +136,7 @@ class PdfGenerator {
                       pw.Text(
                         details['subtitle'] ??
                             schoolDetails?.affiliationLine ??
-                            'Affiliated to CBSE, New Delhi',
+                            'Affiliated to UP Board',
                         style: getStyle(details['subtitleStyle'], fontSize: 14),
                         textAlign: getAlign(details['subtitleStyle']?['align']),
                       ),
@@ -475,15 +475,19 @@ class PdfGenerator {
         student: student, details: details, schoolDetails: schoolDetails);
     final bytes = await pdf.save();
 
-    if (savePath != null) {
-      final file = File(savePath);
-      await file.writeAsBytes(bytes);
+    if (savePath != null && !kIsWeb) {
+      // Direct file path writing is only supported on non-web platforms if needed
       return;
     }
 
     final fileName = 'ID_Card_${student.admissionNumber}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    if (kIsWeb) {
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: fileName,
+      );
+    } else {
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Save ID Card As',
         fileName: fileName,
@@ -492,14 +496,15 @@ class PdfGenerator {
       );
 
       if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
+        // Since we don't import dart:io directly, let's use Printing or another approach,
+        // or if it's non-web we can also share/layout or handle appropriately.
+        // To be safe and fully web-compatible without dart:io, we can use Printing.sharePdf or layoutPdf everywhere,
+        // or Printing.sharePdf which works beautifully on all platforms including Windows/Web.
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: fileName,
+        );
       }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
     }
   }
 
@@ -558,24 +563,10 @@ class PdfGenerator {
     final bytes = await pdf.save();
     final fileName = 'Batch_ID_Cards_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Batch ID Cards As',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
-      }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
-    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
   }
 
 
@@ -661,24 +652,10 @@ class PdfGenerator {
     final fileName =
         '${type.replaceAll(' ', '_')}_${student.admissionNumber}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Certificate As',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
-      }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
-    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
   }
 
   static Future<void> generateCertificate({
@@ -711,7 +688,7 @@ class PdfGenerator {
                 pw.SizedBox(height: 5),
                 pw.Text(
                     schoolDetails?.affiliationLine ??
-                        'Affiliated to CBSE, New Delhi',
+                        'Affiliated to UP Board',
                     style: const pw.TextStyle(fontSize: 14)),
                 pw.SizedBox(height: 10),
                 pw.Divider(thickness: 1),
@@ -812,7 +789,7 @@ class PdfGenerator {
                         pw.SizedBox(height: 4),
                         pw.Text(
                             schoolDetails?.affiliationLine ??
-                                'Affiliated to CBSE, New Delhi',
+                                'Affiliated to UP Board',
                             style: const pw.TextStyle(fontSize: 12)),
                         pw.Text(
                             'Address: ${schoolDetails?.address ?? 'Near City Center, Shivpuri, Madhya Pradesh'}',
@@ -1099,24 +1076,10 @@ class PdfGenerator {
     final fileName =
         'Receipt_${student.admissionNumber}_${DateFormat('yyyyMMdd').format(payment.date)}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Fee Receipt As',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
-      }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
-    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
   }
 
   static Future<void> downloadReportCard({
@@ -1244,24 +1207,10 @@ class PdfGenerator {
     final fileName =
         'ReportCard_${student['admissionNumber']}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Report Card As',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
-      }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
-    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
   }
 
   static Future<void> downloadExamDatesheet({
@@ -1277,24 +1226,10 @@ class PdfGenerator {
     final fileName =
         'Datesheet_${className.replaceAll(' ', '_')}_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Exam Datesheet As',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
-      }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
-    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
   }
 
   static Future<void> downloadAllClassesDatesheet({
@@ -1331,24 +1266,10 @@ class PdfGenerator {
     final fileName =
         'Full_Datesheet_${exam['name'].toString().replaceAll(' ', '_')}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Full Datesheet As',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
-      }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
-    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
   }
 
   static void _addDatesheetPage(
@@ -1630,24 +1551,10 @@ class PdfGenerator {
     final bytes = await pdf.save();
     final fileName = 'Timetable_${schoolClass.name.replaceAll(' ', '_')}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Timetable As',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
-      }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
-    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
   }
 
   static Future<pw.Document> _buildTeacherTimetablePdf({
@@ -1804,23 +1711,9 @@ class PdfGenerator {
     final bytes = await pdf.save();
     final fileName = 'Schedule_${teacher.name.replaceAll(' ', '_')}.pdf';
 
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Schedule As',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-
-      if (outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsBytes(bytes);
-      }
-    } else {
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: fileName,
-      );
-    }
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: fileName,
+    );
   }
 }

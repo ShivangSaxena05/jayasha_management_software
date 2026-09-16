@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -73,9 +74,14 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
   String? _classTeacherClass;
   final _classTeacherSectionController = TextEditingController();
 
-  File? _imageFile;
-  File? _aadhaarFrontFile;
-  File? _aadhaarBackFile;
+  XFile? _imageFile;
+  XFile? _aadhaarFrontFile;
+  XFile? _aadhaarBackFile;
+
+  Uint8List? _webImageBytes;
+  Uint8List? _webAadhaarFrontBytes;
+  Uint8List? _webAadhaarBackBytes;
+
   String? _existingPhotoUrl;
   String? _existingAadhaarFrontUrl;
   String? _existingAadhaarBackUrl;
@@ -147,15 +153,31 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
         imageQuality: 85,
       );
       if (pickedFile != null) {
-        setState(() {
-          if (isProfile) {
-            _imageFile = File(pickedFile.path);
-          } else if (isFront) {
-            _aadhaarFrontFile = File(pickedFile.path);
-          } else {
-            _aadhaarBackFile = File(pickedFile.path);
-          }
-        });
+        if (kIsWeb) {
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            if (isProfile) {
+              _imageFile = pickedFile;
+              _webImageBytes = bytes;
+            } else if (isFront) {
+              _aadhaarFrontFile = pickedFile;
+              _webAadhaarFrontBytes = bytes;
+            } else {
+              _aadhaarBackFile = pickedFile;
+              _webAadhaarBackBytes = bytes;
+            }
+          });
+        } else {
+          setState(() {
+            if (isProfile) {
+              _imageFile = pickedFile;
+            } else if (isFront) {
+              _aadhaarFrontFile = pickedFile;
+            } else {
+              _aadhaarBackFile = pickedFile;
+            }
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error picking image: $e");
@@ -462,10 +484,10 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
                 CircleAvatar(
                   radius: 50,
                   backgroundColor: Colors.grey.shade200,
-                  backgroundImage: _imageFile != null
-                    ? FileImage(_imageFile!)
-                    : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null),
-                  child: (_imageFile == null && _existingPhotoUrl == null)
+                  backgroundImage: kIsWeb
+                    ? (_webImageBytes != null ? MemoryImage(_webImageBytes!) : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null))
+                    : (_imageFile != null ? NetworkImage(_imageFile!.path) as ImageProvider : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null)),
+                  child: (_imageFile == null && _webImageBytes == null && _existingPhotoUrl == null)
                       ? const Icon(Icons.person, size: 50, color: Colors.grey)
                       : null,
                 ),
@@ -896,19 +918,19 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
       final uploadTasks = <Future<String?>>[];
 
       if (_imageFile != null) {
-        uploadTasks.add(_uploadRepo.uploadFile(_imageFile!.path, 'teacher_photo'));
+        uploadTasks.add(_uploadRepo.uploadFile(kIsWeb ? _webImageBytes : _imageFile, 'teacher_photo'));
       } else {
         uploadTasks.add(Future.value(_existingPhotoUrl));
       }
 
       if (_aadhaarFrontFile != null) {
-        uploadTasks.add(_uploadRepo.uploadFile(_aadhaarFrontFile!.path, 'teacher_aadhaar_front'));
+        uploadTasks.add(_uploadRepo.uploadFile(kIsWeb ? _webAadhaarFrontBytes : _aadhaarFrontFile, 'teacher_aadhaar_front'));
       } else {
         uploadTasks.add(Future.value(_existingAadhaarFrontUrl));
       }
 
       if (_aadhaarBackFile != null) {
-        uploadTasks.add(_uploadRepo.uploadFile(_aadhaarBackFile!.path, 'teacher_aadhaar_back'));
+        uploadTasks.add(_uploadRepo.uploadFile(kIsWeb ? _webAadhaarBackBytes : _aadhaarBackFile, 'teacher_aadhaar_back'));
       } else {
         uploadTasks.add(Future.value(_existingAadhaarBackUrl));
       }
@@ -1056,7 +1078,16 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
     }
   }
 
-  Widget _buildAadhaarPicker(String label, File? file, String? existingUrl, VoidCallback onTap) {
+  Widget _buildAadhaarPicker(String label, XFile? file, String? existingUrl, VoidCallback onTap) {
+    Uint8List? webBytes;
+    if (kIsWeb) {
+      if (label == "Front Side") {
+        webBytes = _webAadhaarFrontBytes;
+      } else {
+        webBytes = _webAadhaarBackBytes;
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1075,9 +1106,9 @@ class _TeacherFormPageState extends State<TeacherFormPage> {
             child: (file != null || existingUrl != null)
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: file != null
-                      ? Image.file(file, fit: BoxFit.cover)
-                      : Image.network(existingUrl!, fit: BoxFit.cover),
+                    child: kIsWeb
+                      ? (webBytes != null ? Image.memory(webBytes, fit: BoxFit.cover) : Image.network(existingUrl!, fit: BoxFit.cover))
+                      : (file != null ? Image.network(file.path, fit: BoxFit.cover) : Image.network(existingUrl!, fit: BoxFit.cover)),
                   )
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,

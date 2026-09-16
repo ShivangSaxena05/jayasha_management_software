@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/features/auth/presentation/pages/login_page.dart';
 import 'package:jayasha_childrens_academy/features/auth/presentation/pages/greeting_page.dart';
@@ -25,11 +26,18 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final onboardingRepo = OnboardingRepositoryImpl();
-  final isComplete = await onboardingRepo.isOnboardingComplete();
+  final prefs = await SharedPreferences.getInstance();
+  final isComplete = prefs.getBool('onboarding_complete') ?? false;
+  final hasToken = prefs.getString('auth_token') != null;
+
   final schoolRepo = SchoolRepositoryImpl();
 
   // Pre-fetch school details
-  await schoolRepo.fetchSchoolDetails();
+  try {
+    await schoolRepo.fetchSchoolDetails();
+  } catch (e) {
+    debugPrint('Pre-fetch school details failed: $e');
+  }
 
   runApp(
     MultiProvider(
@@ -45,14 +53,14 @@ void main() async {
         Provider<ExamRepository>(create: (_) => ExamRepository()),
         ChangeNotifierProvider<SchoolRepository>(create: (_) => schoolRepo),
       ],
-      child: MyApp(isComplete: isComplete),
+      child: MyApp(isInitialised: isComplete && hasToken),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
-  final bool isComplete;
-  const MyApp({super.key, required this.isComplete});
+  final bool isInitialised;
+  const MyApp({super.key, required this.isInitialised});
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +78,11 @@ class MyApp extends StatelessWidget {
       builder: (context, child) {
         return OfflineBanner(child: child ?? const SizedBox());
       },
-      home: isComplete ? const DashboardPage() : const GreetingPage(),
+      home: isInitialised ? const DashboardPage() : const GreetingPage(),
+      routes: {
+        '/login': (context) => const LoginPage(),
+        '/dashboard': (context) => const DashboardPage(),
+      },
     );
   }
 }

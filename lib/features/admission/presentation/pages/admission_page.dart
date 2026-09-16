@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:collection/collection.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
@@ -11,6 +14,7 @@ import 'package:jayasha_childrens_academy/features/fees/domain/repositories/fee_
 import 'package:jayasha_childrens_academy/core/models/fee_payment.dart';
 import 'package:jayasha_childrens_academy/core/utils/app_snackbar.dart';
 import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
+import 'package:jayasha_childrens_academy/core/utils/platform_utils.dart';
 
 class AdmissionPage extends StatefulWidget {
   const AdmissionPage({super.key});
@@ -44,6 +48,9 @@ class _AdmissionPageState extends State<AdmissionPage> {
   String? _selectedClassId;
   String? _selectedSection;
   List<String> _availableSections = [];
+
+  XFile? _studentPhoto;
+  Uint8List? _photoBytes;
 
   List<SchoolClass> _availableClasses = [];
   String? _currentSessionId;
@@ -174,6 +181,19 @@ class _AdmissionPageState extends State<AdmissionPage> {
     }
   }
 
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      setState(() {
+        _studentPhoto = image;
+        _photoBytes = bytes;
+      });
+    }
+  }
+
   Future<void> _submitForm() async {
     // Validate the last step (Review) though it mostly has summary
     if (!_formKeys[2].currentState!.validate()) return;
@@ -206,7 +226,7 @@ class _AdmissionPageState extends State<AdmissionPage> {
     );
 
     try {
-      final result = await studentRepo.registerAdmission(admission);
+      final result = await studentRepo.registerAdmission(admission, photo: kIsWeb ? _photoBytes : _studentPhoto);
 
       if (result['success']) {
         // Record admission fee payment automatically
@@ -273,6 +293,8 @@ class _AdmissionPageState extends State<AdmissionPage> {
       _contactController.clear();
       _addressController.clear();
       _selectedGender = 'Male';
+      _studentPhoto = null;
+      _photoBytes = null;
       if (_availableClasses.isNotEmpty) {
         _selectedClassId = _availableClasses[0].id;
         _updateSections(_availableClasses[0]);
@@ -293,8 +315,10 @@ class _AdmissionPageState extends State<AdmissionPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final bool isDesktop = PlatformUtils.isDesktop(context);
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(30),
+      padding: EdgeInsets.all(isDesktop ? 30 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -341,63 +365,134 @@ class _AdmissionPageState extends State<AdmissionPage> {
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     child: Column(
                       children: [
-                        Row(
-                          children: [
-                            Expanded(child: _buildTextField('Admission Number', Icons.numbers, _admissionNumberController, hint: 'e.g. 2024001')),
-                            const SizedBox(width: 20),
-                            Expanded(child: _buildTextField('Roll Number (Optional)', Icons.tag, _rollNumberController, hint: 'e.g. 15')),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Expanded(child: _buildTextField('First Name', Icons.person_outline, _firstNameController, hint: 'Student First Name')),
-                            const SizedBox(width: 20),
-                            Expanded(child: _buildTextField('Last Name (Optional)', Icons.person_outline, _lastNameController, hint: 'Student Last Name')),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildTextField(
-                                'Date of Birth',
-                                Icons.calendar_today,
-                                _dobController,
-                                hint: 'YYYY-MM-DD',
-                                readOnly: true,
-                                onTap: () => _selectDate(context),
+                        Center(
+                          child: Stack(
+                            children: [
+                              CircleAvatar(
+                                radius: 50,
+                                backgroundColor: Colors.grey.shade200,
+                                backgroundImage: _photoBytes != null
+                                    ? MemoryImage(_photoBytes!)
+                                    : null,
+                                child: _photoBytes == null
+                                    ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                                    : null,
                               ),
-                            ),
-                            const SizedBox(width: 20),
-                            Expanded(
-                              child: _buildDropdownField('Gender', ['Male', 'Female', 'Other'], (val) {
-                                setState(() => _selectedGender = val!);
-                              }, _selectedGender),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildClassDropdown(),
-                            ),
-                            if (_selectedClassId != null && _availableSections.isNotEmpty) ...[
-                              const SizedBox(width: 20),
-                              Expanded(
-                                child: _buildDropdownField(
-                                  'Section',
-                                  _availableSections,
-                                  (val) {
-                                    setState(() => _selectedSection = val);
-                                  },
-                                  _selectedSection,
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: CircleAvatar(
+                                  backgroundColor: AppColors.primary,
+                                  radius: 18,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
+                                    onPressed: _pickImage,
+                                  ),
                                 ),
                               ),
                             ],
-                          ],
+                          ),
                         ),
+                        const SizedBox(height: 24),
+                        if (isDesktop)
+                          Row(
+                            children: [
+                              Expanded(child: _buildTextField('Admission Number', Icons.numbers, _admissionNumberController, hint: 'e.g. 2024001')),
+                              const SizedBox(width: 20),
+                              Expanded(child: _buildTextField('Roll Number (Optional)', Icons.tag, _rollNumberController, hint: 'e.g. 15')),
+                            ],
+                          )
+                        else ...[
+                          _buildTextField('Admission Number', Icons.numbers, _admissionNumberController, hint: 'e.g. 2024001'),
+                          const SizedBox(height: 20),
+                          _buildTextField('Roll Number (Optional)', Icons.tag, _rollNumberController, hint: 'e.g. 15'),
+                        ],
+                        const SizedBox(height: 20),
+                        if (isDesktop)
+                          Row(
+                            children: [
+                              Expanded(child: _buildTextField('First Name', Icons.person_outline, _firstNameController, hint: 'Student First Name')),
+                              const SizedBox(width: 20),
+                              Expanded(child: _buildTextField('Last Name (Optional)', Icons.person_outline, _lastNameController, hint: 'Student Last Name')),
+                            ],
+                          )
+                        else ...[
+                          _buildTextField('First Name', Icons.person_outline, _firstNameController, hint: 'Student First Name'),
+                          const SizedBox(height: 20),
+                          _buildTextField('Last Name (Optional)', Icons.person_outline, _lastNameController, hint: 'Student Last Name'),
+                        ],
+                        const SizedBox(height: 20),
+                        if (isDesktop)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  'Date of Birth',
+                                  Icons.calendar_today,
+                                  _dobController,
+                                  hint: 'YYYY-MM-DD',
+                                  readOnly: true,
+                                  onTap: () => _selectDate(context),
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              Expanded(
+                                child: _buildDropdownField('Gender', ['Male', 'Female', 'Other'], (val) {
+                                  setState(() => _selectedGender = val!);
+                                }, _selectedGender),
+                              ),
+                            ],
+                          )
+                        else ...[
+                          _buildTextField(
+                            'Date of Birth',
+                            Icons.calendar_today,
+                            _dobController,
+                            hint: 'YYYY-MM-DD',
+                            readOnly: true,
+                            onTap: () => _selectDate(context),
+                          ),
+                          const SizedBox(height: 20),
+                          _buildDropdownField('Gender', ['Male', 'Female', 'Other'], (val) {
+                            setState(() => _selectedGender = val!);
+                          }, _selectedGender),
+                        ],
+                        const SizedBox(height: 20),
+                        if (isDesktop)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildClassDropdown(),
+                              ),
+                              if (_selectedClassId != null && _availableSections.isNotEmpty) ...[
+                                const SizedBox(width: 20),
+                                Expanded(
+                                  child: _buildDropdownField(
+                                    'Section',
+                                    _availableSections,
+                                    (val) {
+                                      setState(() => _selectedSection = val);
+                                    },
+                                    _selectedSection,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          )
+                        else ...[
+                          _buildClassDropdown(),
+                          if (_selectedClassId != null && _availableSections.isNotEmpty) ...[
+                            const SizedBox(height: 20),
+                            _buildDropdownField(
+                              'Section',
+                              _availableSections,
+                              (val) {
+                                setState(() => _selectedSection = val);
+                              },
+                              _selectedSection,
+                            ),
+                          ],
+                        ],
                       ],
                     ),
                   ),
@@ -434,6 +529,22 @@ class _AdmissionPageState extends State<AdmissionPage> {
                       children: [
                         const Text('Admission Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 16),
+                        if (_photoBytes != null)
+                          Center(
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                image: DecorationImage(
+                                  image: MemoryImage(_photoBytes!),
+                                  fit: BoxFit.cover,
+                                ),
+                                border: Border.all(color: AppColors.primary, width: 2),
+                              ),
+                            ),
+                          ),
                         _buildSummaryRow('Student Name', '${_firstNameController.text} ${_lastNameController.text}'.trim()),
                         _buildSummaryRow('Admission No', _admissionNumberController.text),
                         if (_rollNumberController.text.isNotEmpty)

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -58,7 +58,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
     try {
       final repo = Provider.of<SchoolRepository>(context, listen: false);
-      final logoUrl = await repo.updateLogo(File(image.path));
+
+      dynamic logoFileArg;
+      if (kIsWeb) {
+        logoFileArg = await image.readAsBytes();
+      } else {
+        logoFileArg = image; // will be handled via .path
+      }
+
+      final logoUrl = await repo.updateLogo(logoFileArg);
 
       if (logoUrl != null && mounted) {
         final currentDetails = repo.schoolDetails ?? SchoolDetails(

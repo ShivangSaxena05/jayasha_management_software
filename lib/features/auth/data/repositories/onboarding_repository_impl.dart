@@ -1,5 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
 import 'package:collection/collection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/models/principal.dart';
@@ -382,22 +385,32 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
   }
 
   @override
-  Future<String?> uploadFile(String filePath, String fieldName) async {
+  Future<String?> uploadFile(dynamic file, String fieldName) async {
     try {
-      print('DEBUG: Uploading file $filePath to ${ApiConfig.baseUrl}/upload/photo');
       final request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/upload/photo'));
-      request.files.add(await http.MultipartFile.fromPath('photo', filePath));
-      // Using 'photo' as generic field name for single uploads as per route
+
+      if (kIsWeb) {
+        if (file is Uint8List) {
+          request.files.add(http.MultipartFile.fromBytes('photo', file, filename: 'upload.png'));
+        } else if (file is Map && file.containsKey('bytes')) {
+          request.files.add(http.MultipartFile.fromBytes('photo', file['bytes'] as Uint8List, filename: file['name'] as String? ?? 'upload.png'));
+        } else if (file is XFile) {
+          final bytes = await file.readAsBytes();
+          request.files.add(http.MultipartFile.fromBytes('photo', bytes, filename: file.name));
+        } else {
+          // Fallback - might still fail if it's a string path
+          throw AppException('Cannot upload file from path on web. Provide bytes or XFile.');
+        }
+      } else {
+        final String path = file is XFile ? file.path : file.toString();
+        request.files.add(await http.MultipartFile.fromPath('photo', path));
+      }
 
       final response = await request.send();
-      print('DEBUG: uploadFile status code: ${response.statusCode}');
       if (response.statusCode == 200) {
         final respStr = await response.stream.bytesToString();
         final data = jsonDecode(respStr);
         return data['url'];
-      } else {
-        final respStr = await response.stream.bytesToString();
-        print('DEBUG: uploadFile failed with body: $respStr');
       }
       return null;
     } catch (e) {

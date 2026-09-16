@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
@@ -41,16 +44,40 @@ class StaffRepositoryImpl implements StaffRepository {
   }
 
   @override
-  Future<bool> addTeacher(Teacher teacher) async {
+  Future<bool> addTeacher(Teacher teacher, {XFile? photo}) async {
     try {
       final token = await _getToken();
-      final response = await ApiClient.post(
-        '${ApiConfig.teachers}/add',
-        teacher.toJson(),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
+      final url = Uri.parse('${ApiConfig.teachers}/add');
+      final request = http.MultipartRequest('POST', url);
+
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add teacher data
+      teacher.toJson().forEach((key, value) {
+        if (value != null) {
+          request.fields[key] = value.toString();
+        }
+      });
+
+      // Add photo if present
+      if (photo != null) {
+        if (kIsWeb) {
+          final bytes = await photo.readAsBytes();
+          request.files.add(http.MultipartFile.fromBytes(
+            'photo',
+            bytes,
+            filename: photo.name,
+          ));
+        } else {
+          request.files.add(await http.MultipartFile.fromPath(
+            'photo',
+            photo.path,
+          ));
+        }
+      }
+
+      final streamedResponse = await request.send().timeout(ApiClient.timeout);
+      final response = await http.Response.fromStream(streamedResponse);
 
       return response.statusCode == 201;
     } catch (e) {
@@ -60,16 +87,40 @@ class StaffRepositoryImpl implements StaffRepository {
   }
 
   @override
-  Future<bool> updateTeacher(String id, Teacher teacher) async {
+  Future<bool> updateTeacher(String id, Teacher teacher, {XFile? photo}) async {
     try {
       final token = await _getToken();
-      final response = await ApiClient.put(
-        '${ApiConfig.teachers}/$id',
-        teacher.toJson(),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
+      final url = Uri.parse('${ApiConfig.teachers}/$id');
+      final request = http.MultipartRequest('PUT', url);
+
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add teacher data
+      teacher.toJson().forEach((key, value) {
+        if (value != null) {
+          request.fields[key] = value.toString();
+        }
+      });
+
+      // Add photo if present
+      if (photo != null) {
+        if (kIsWeb) {
+          final bytes = await photo.readAsBytes();
+          request.files.add(http.MultipartFile.fromBytes(
+            'photo',
+            bytes,
+            filename: photo.name,
+          ));
+        } else {
+          request.files.add(await http.MultipartFile.fromPath(
+            'photo',
+            photo.path,
+          ));
+        }
+      }
+
+      final streamedResponse = await request.send().timeout(ApiClient.timeout);
+      final response = await http.Response.fromStream(streamedResponse);
 
       return response.statusCode == 200;
     } catch (e) {

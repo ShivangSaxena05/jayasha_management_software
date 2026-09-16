@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
@@ -11,7 +10,7 @@ abstract class SchoolRepository extends ChangeNotifier {
   SchoolDetails? get schoolDetails;
   Future<SchoolDetails?> fetchSchoolDetails();
   Future<Map<String, dynamic>> updateSchoolDetails(SchoolDetails details);
-  Future<String?> updateLogo(File file);
+  Future<String?> updateLogo(dynamic file);
 }
 
 class SchoolRepositoryImpl extends SchoolRepository {
@@ -30,7 +29,7 @@ class SchoolRepositoryImpl extends SchoolRepository {
       final response = await ApiClient.get(
         '${ApiConfig.baseUrl}/school',
         headers: {
-          'Authorization': 'Bearer $token',
+          if (token != null) 'Authorization': 'Bearer $token',
         },
       );
 
@@ -82,7 +81,7 @@ class SchoolRepositoryImpl extends SchoolRepository {
   }
 
   @override
-  Future<String?> updateLogo(File file) async {
+  Future<String?> updateLogo(dynamic file) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
@@ -96,9 +95,27 @@ class SchoolRepositoryImpl extends SchoolRepository {
         'Authorization': 'Bearer $token',
       });
 
-      request.files.add(
-        await http.MultipartFile.fromPath('logo', file.path),
-      );
+      if (kIsWeb) {
+        // file is a NamedBytes or similar for web, or we can check if it's Uint8List / XFile
+        if (file is Uint8List) {
+          request.files.add(
+            http.MultipartFile.fromBytes('logo', file, filename: 'logo.png'),
+          );
+        } else if (file is Map && file.containsKey('bytes')) {
+          request.files.add(
+            http.MultipartFile.fromBytes('logo', file['bytes'] as Uint8List, filename: file['name'] as String? ?? 'logo.png'),
+          );
+        } else {
+          // Fallback if it's passed as a custom object or if path is string
+          request.files.add(
+            await http.MultipartFile.fromPath('logo', file.path.toString()),
+          );
+        }
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath('logo', file.path as String),
+        );
+      }
 
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);

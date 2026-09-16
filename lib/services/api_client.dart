@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../core/error/exceptions.dart';
 
@@ -55,12 +54,14 @@ class ApiClient {
     try {
       final response = await request().timeout(timeout);
       return _returnResponse(response);
-    } on SocketException {
-      throw NetworkException();
     } on TimeoutException {
       throw TimeoutException();
     } catch (e) {
       if (e is AppException) rethrow;
+      // SocketException is only available in dart:io, but it's thrown as a generic error in web
+      if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+        throw NetworkException();
+      }
       throw FetchDataException(e.toString());
     }
   }

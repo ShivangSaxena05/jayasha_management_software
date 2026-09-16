@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:jayasha_childrens_academy/core/widgets/error_view.dart';
@@ -184,9 +185,9 @@ class _StaffPageState extends State<StaffPage> {
                       backgroundImage: (photoPath != null && photoPath.isNotEmpty)
                           ? (photoPath.startsWith('http')
                               ? NetworkImage(photoPath)
-                              : FileImage(File(photoPath)) as ImageProvider)
+                              : (!kIsWeb ? FileImage(io.File(photoPath)) : null) as ImageProvider?)
                           : null,
-                      child: (photoPath == null || photoPath.isEmpty) ? const Icon(Icons.person, color: Colors.white, size: 28) : null,
+                      child: (photoPath == null || photoPath.isEmpty || (kIsWeb && !photoPath.startsWith('http'))) ? const Icon(Icons.person, color: Colors.white, size: 28) : null,
                     ),
                     const SizedBox(width: 16),
                   ],

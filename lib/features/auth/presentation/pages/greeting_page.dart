@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/features/auth/presentation/pages/login_page.dart';
 import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onboarding_repository.dart';
@@ -56,13 +57,16 @@ class _GreetingPageState extends State<GreetingPage> with SingleTickerProviderSt
       final repo = Provider.of<OnboardingRepository>(context, listen: false);
       final isComplete = await repo.isOnboardingComplete();
 
+      final prefs = await SharedPreferences.getInstance();
+      final hasToken = prefs.getString('auth_token') != null;
+
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted) {
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) =>
-                isComplete ? const DashboardPage() : const LoginPage(),
+                (isComplete && hasToken) ? const DashboardPage() : const LoginPage(),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
                 return FadeTransition(opacity: animation, child: child);
               },

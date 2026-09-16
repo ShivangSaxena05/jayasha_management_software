@@ -1,5 +1,5 @@
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
@@ -11,6 +11,7 @@ import 'package:jayasha_childrens_academy/features/staff/domain/repositories/sta
 import 'package:jayasha_childrens_academy/features/staff/presentation/pages/teacher_form_page.dart';
 import 'package:jayasha_childrens_academy/features/auth/presentation/pages/onboarding/principal_onboarding_page.dart';
 import 'package:jayasha_childrens_academy/features/dashboard/data/repositories/dashboard_repository.dart';
+import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 
 class StaffDetailPage extends StatefulWidget {
   final dynamic person;
@@ -143,12 +144,12 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
           CircleAvatar(
             radius: 50,
             backgroundColor: AppColors.primary,
-            backgroundImage: photoPath != null
-                ? (photoPath.startsWith('http')
-                    ? NetworkImage(photoPath)
-                    : FileImage(File(photoPath)) as ImageProvider)
+            backgroundImage: (photoPath != null && photoPath.isNotEmpty)
+                ? NetworkImage(photoPath.startsWith('http')
+                    ? photoPath
+                    : '${ApiConfig.baseUrl}/$photoPath')
                 : null,
-            child: photoPath == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
+            child: (photoPath == null || photoPath.isEmpty) ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
           ),
           const SizedBox(width: 24),
           Expanded(
@@ -361,9 +362,10 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: path.startsWith('http')
-                ? Image.network(path, fit: BoxFit.cover)
-                : Image.file(File(path), fit: BoxFit.cover),
+            child: Image.network(
+              path.startsWith('http') ? path : '${ApiConfig.baseUrl}/$path',
+              fit: BoxFit.cover,
+            ),
           ),
         ),
       ],

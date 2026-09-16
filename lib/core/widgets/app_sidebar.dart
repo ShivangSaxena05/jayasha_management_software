@@ -7,11 +7,13 @@ import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onbo
 class AppSidebar extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
+  final bool isDrawer;
 
   const AppSidebar({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
+    this.isDrawer = false,
   });
 
   @override
@@ -22,7 +24,18 @@ class _AppSidebarState extends State<AppSidebar> {
   bool _isExpanded = false;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.isDrawer) {
+      _isExpanded = true;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (widget.isDrawer) {
+      return _buildSidebarContent();
+    }
     return MouseRegion(
       onEnter: (_) => setState(() => _isExpanded = true),
       onExit: (_) => setState(() => _isExpanded = false),
@@ -40,73 +53,77 @@ class _AppSidebarState extends State<AppSidebar> {
             ),
           ],
         ),
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            // Logo/Header area
-            InkWell(
-              mouseCursor: SystemMouseCursors.click,
-              onTap: () => widget.onItemSelected(0),
-              child: Container(
-                height: 70,
-                width: double.infinity,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 70,
-                      child: Center(
-                        child: Image.asset(
-                          'assets/images/JCB_Logo.png',
-                          height: 40,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Icon(Icons.school, color: AppColors.primary, size: 35),
-                        ),
-                      ),
-                    ),
-                    if (_isExpanded)
-                      const Expanded(
-                        child: Text(
-                          "Jayasha Children's Academy",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(indent: 10, endIndent: 10),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    _buildSidebarItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    _buildSidebarItem(Icons.person_add_rounded, 'Admission', 1),
-                    _buildSidebarItem(Icons.school_rounded, 'Students', 2),
-                    _buildSidebarItem(Icons.assignment_rounded, 'Examination', 3),
-                    _buildSidebarItem(Icons.payments_rounded, 'Fee', 4),
-                    _buildSidebarItem(Icons.people_rounded, 'Staff', 5),
-                    _buildSidebarItem(Icons.class_rounded, 'Classes', 6),
-                    _buildSidebarItem(Icons.verified_rounded, 'Certificates', 7),
-                    _buildSidebarItem(Icons.settings_rounded, 'Settings', 8),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(indent: 10, endIndent: 10),
-            _buildSidebarItem(Icons.logout_rounded, 'Logout', -1, isLogout: true),
-            const SizedBox(height: 15),
-          ],
-        ),
+        child: _buildSidebarContent(),
       ),
+    );
+  }
+
+  Widget _buildSidebarContent() {
+    return Column(
+      children: [
+        const SizedBox(height: 10),
+        // Logo/Header area
+        InkWell(
+          mouseCursor: SystemMouseCursors.click,
+          onTap: () => widget.onItemSelected(0),
+          child: Container(
+            height: 70,
+            width: double.infinity,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 70,
+                  child: Center(
+                    child: Image.asset(
+                      'assets/images/JCB_Logo.png',
+                      height: 40,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.school, color: AppColors.primary, size: 35),
+                    ),
+                  ),
+                ),
+                if (_isExpanded)
+                  const Expanded(
+                    child: Text(
+                      "Jayasha Children's Academy",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const Divider(indent: 10, endIndent: 10),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                _buildSidebarItem(Icons.dashboard_rounded, 'Dashboard', 0),
+                _buildSidebarItem(Icons.person_add_rounded, 'Admission', 1),
+                _buildSidebarItem(Icons.school_rounded, 'Students', 2),
+                _buildSidebarItem(Icons.assignment_rounded, 'Examination', 3),
+                _buildSidebarItem(Icons.payments_rounded, 'Fee', 4),
+                _buildSidebarItem(Icons.people_rounded, 'Staff', 5),
+                _buildSidebarItem(Icons.class_rounded, 'Classes', 6),
+                _buildSidebarItem(Icons.verified_rounded, 'Certificates', 7),
+                _buildSidebarItem(Icons.settings_rounded, 'Settings', 8),
+              ],
+            ),
+          ),
+        ),
+        const Divider(indent: 10, endIndent: 10),
+        _buildSidebarItem(Icons.logout_rounded, 'Logout', -1, isLogout: true),
+        const SizedBox(height: 15),
+      ],
     );
   }
 

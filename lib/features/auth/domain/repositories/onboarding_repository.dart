@@ -35,5 +35,5 @@ abstract class OnboardingRepository {
   Future<void> syncOnboardingData();
 
   // File upload
-  Future<String?> uploadFile(String filePath, String fieldName);
+  Future<String?> uploadFile(dynamic filePathOrBytes, String fieldName);
 }

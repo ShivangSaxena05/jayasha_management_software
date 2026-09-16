@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
@@ -10,23 +13,56 @@ class StudentRepositoryImpl implements StudentRepository {
   static const String _tokenKey = 'auth_token';
 
   @override
-  Future<Map<String, dynamic>> registerAdmission(StudentAdmission admission) async {
+  Future<Map<String, dynamic>> registerAdmission(StudentAdmission admission, {dynamic photo}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await ApiClient.post(
-        '${ApiConfig.baseUrl}/students/admission',
-        admission.toJson(),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
+      final url = Uri.parse('${ApiConfig.baseUrl}/students/admission');
+      final request = http.MultipartRequest('POST', url);
 
-      final responseData = jsonDecode(response.body);
-      return {'success': true, 'data': responseData};
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add student data
+      admission.toJson().forEach((key, value) {
+        if (value != null) {
+          request.fields[key] = value.toString();
+        }
+      });
+
+      // Add photo if present
+      if (photo != null) {
+        if (kIsWeb) {
+          final Uint8List bytes = photo is Uint8List ? photo : await (photo as XFile).readAsBytes();
+          final String fileName = photo is XFile ? photo.name : 'photo.jpg';
+          request.files.add(http.MultipartFile.fromBytes(
+            'photo',
+            bytes,
+            filename: fileName,
+          ));
+        } else {
+          final XFile xFile = photo as XFile;
+          request.files.add(await http.MultipartFile.fromPath(
+            'photo',
+            xFile.path,
+          ));
+        }
+      }
+
+      final streamedResponse = await request.send().timeout(ApiClient.timeout);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = jsonDecode(response.body);
+        return {'success': true, 'data': responseData};
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Failed to register student.',
+        };
+      }
     } catch (e) {
-      if (e is AppException) rethrow;
       return {
         'success': false,
         'message': e.toString(),
@@ -85,23 +121,56 @@ class StudentRepositoryImpl implements StudentRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> updateStudent(String id, StudentAdmission admission) async {
+  Future<Map<String, dynamic>> updateStudent(String id, StudentAdmission admission, {dynamic photo}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenKey);
 
-      final response = await ApiClient.put(
-        '${ApiConfig.baseUrl}/students/$id',
-        admission.toJson(),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
+      final url = Uri.parse('${ApiConfig.baseUrl}/students/$id');
+      final request = http.MultipartRequest('PUT', url);
 
-      final responseData = jsonDecode(response.body);
-      return {'success': true, 'data': responseData};
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add student data
+      admission.toJson().forEach((key, value) {
+        if (value != null) {
+          request.fields[key] = value.toString();
+        }
+      });
+
+      // Add photo if present
+      if (photo != null) {
+        if (kIsWeb) {
+          final Uint8List bytes = photo is Uint8List ? photo : await (photo as XFile).readAsBytes();
+          final String fileName = photo is XFile ? photo.name : 'photo.jpg';
+          request.files.add(http.MultipartFile.fromBytes(
+            'photo',
+            bytes,
+            filename: fileName,
+          ));
+        } else {
+          final XFile xFile = photo as XFile;
+          request.files.add(await http.MultipartFile.fromPath(
+            'photo',
+            xFile.path,
+          ));
+        }
+      }
+
+      final streamedResponse = await request.send().timeout(ApiClient.timeout);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        return {'success': true, 'data': responseData};
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Failed to update student.',
+        };
+      }
     } catch (e) {
-      if (e is AppException) rethrow;
       return {
         'success': false,
         'message': e.toString(),

@@ -11,6 +11,7 @@ import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
 import 'package:jayasha_childrens_academy/features/settings/data/repositories/school_repository.dart';
 import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
 import 'package:jayasha_childrens_academy/features/certificates/presentation/pages/id_card_editor_page.dart';
+import 'package:jayasha_childrens_academy/core/utils/platform_utils.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -174,59 +175,44 @@ class _StudentsPageState extends State<StudentsPage> {
       );
     }
 
+    final bool isDesktop = PlatformUtils.isDesktop(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Student Directory',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+            isDesktop
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildHeaderTitle(),
+                      Row(
+                        children: [
+                          _buildBatchButton(),
+                          const SizedBox(width: 12),
+                          _buildRegisterButton(),
+                        ],
                       ),
-                    ),
-                    Text(
-                      'Manage and view all students in the academy',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-                ElevatedButton.icon(
-                  onPressed: _getFilteredStudents().isEmpty ? null : _generateBatchIdCards,
-                  icon: const Icon(Icons.badge),
-                  label: const Text('Batch ID Cards'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeaderTitle(),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(child: _buildBatchButton()),
+                          const SizedBox(width: 12),
+                          Expanded(child: _buildRegisterButton()),
+                        ],
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: widget.onRegisterNewStudent,
-                  icon: const Icon(Icons.person_add_alt_1_rounded),
-                  label: const Text('Register New Student'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ],
-            ),
             const SizedBox(height: 32),
 
             // Search
@@ -422,6 +408,54 @@ class _StudentsPageState extends State<StudentsPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderTitle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: const [
+        Text(
+          'Student Directory',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        Text(
+          'Manage and view all students in the academy',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBatchButton() {
+    return ElevatedButton.icon(
+      onPressed: _getFilteredStudents().isEmpty ? null : _generateBatchIdCards,
+      icon: const Icon(Icons.badge),
+      label: const Text('Batch ID Cards'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.orange,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildRegisterButton() {
+    return ElevatedButton.icon(
+      onPressed: widget.onRegisterNewStudent,
+      icon: const Icon(Icons.person_add_alt_1_rounded),
+      label: const Text('Register New Student'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

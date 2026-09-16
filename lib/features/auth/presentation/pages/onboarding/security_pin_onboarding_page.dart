@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
+import 'package:jayasha_childrens_academy/core/models/principal.dart';
 import 'package:jayasha_childrens_academy/features/auth/domain/repositories/onboarding_repository.dart';
 import 'package:jayasha_childrens_academy/features/auth/presentation/widgets/onboarding_progress_header.dart';
 import 'package:jayasha_childrens_academy/features/dashboard/presentation/pages/dashboard_page.dart';
@@ -106,6 +107,82 @@ class _SecurityPinOnboardingPageState extends State<SecurityPinOnboardingPage> {
     }
   }
 
+  void _skipSetup() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final repo = Provider.of<OnboardingRepository>(context, listen: false);
+
+      // Get principal details (might have been entered or skipped in first step)
+      Principal? principalDetails = await repo.getPrincipalDetails();
+
+      // Fallback placeholder if null
+      principalDetails ??= Principal(
+        name: "School Administrator",
+        dob: "01/01/1980",
+        gender: "Other",
+        email: "admin@school.com",
+        phone: "0000000000",
+        address: "School Campus",
+        qualification: "Not Provided",
+        experience: "Not Provided",
+        maritalStatus: "Single",
+      );
+
+      final success = await repo.setupPrincipal(
+        name: principalDetails.name,
+        securityPin: "123456", // Default PIN for skipped setup
+        principalDetails: principalDetails,
+      );
+
+      if (success) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 24),
+                      Text(
+                        "Finalizing Setup...",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8),
+                      Text("Synchronizing default configuration."),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        await repo.syncOnboardingData();
+
+        if (mounted) {
+          Navigator.of(context).pop();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const DashboardPage()),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getHumanReadableError(e))),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,12 +241,7 @@ class _SecurityPinOnboardingPageState extends State<SecurityPinOnboardingPage> {
                         style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                       ),
                       TextButton(
-                        onPressed: () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(builder: (context) => const DashboardPage()),
-                          );
-                        },
+                        onPressed: _isLoading ? null : _skipSetup,
                         child: const Text("Skip for now"),
                       ),
                     ],

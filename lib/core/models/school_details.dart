@@ -34,6 +34,7 @@ class SchoolDetails {
 
   Map<String, dynamic> toJson() {
     return {
+      '_id': id,
       'schoolName': schoolName,
       'address': address,
       'phone': phone,

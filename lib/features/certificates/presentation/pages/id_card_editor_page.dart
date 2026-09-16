@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -230,6 +231,14 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
     final schoolRepo = Provider.of<SchoolRepository>(context, listen: false);
 
     try {
+      if (kIsWeb) {
+        await PdfGenerator.downloadIdCard(
+          student: widget.student,
+          details: _buildDetailsPayload(),
+          schoolDetails: schoolRepo.schoolDetails,
+        );
+        return;
+      }
       final fileName = 'ID_Card_${widget.student.admissionNumber}.pdf';
 
       String? outputFile = await FilePicker.platform.saveFile(
@@ -248,7 +257,6 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
         student: widget.student,
         details: _buildDetailsPayload(),
         schoolDetails: schoolRepo.schoolDetails,
-        savePath: outputFile,
       );
 
       if (mounted) {
@@ -296,9 +304,16 @@ class _IdCardEditorPageState extends State<IdCardEditorPage> {
         'Authorization': 'Bearer $token',
       });
 
-      request.files.add(
-        await http.MultipartFile.fromPath('photo', image.path),
-      );
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        request.files.add(
+          http.MultipartFile.fromBytes('photo', bytes, filename: 'photo.png'),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath('photo', image.path),
+        );
+      }
 
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);

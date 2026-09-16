@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
@@ -332,9 +332,9 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
   String? _classTeacherClass;
   String? _classTeacherSection;
 
-  File? _imageFile;
-  File? _aadhaarFrontFile;
-  File? _aadhaarBackFile;
+  dynamic _imageFile;
+  dynamic _aadhaarFrontFile;
+  dynamic _aadhaarBackFile;
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -378,11 +378,11 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
       if (pickedFile != null) {
         setState(() {
           if (isProfile) {
-            _imageFile = File(pickedFile.path);
+            _imageFile = pickedFile;
           } else if (isFront) {
-            _aadhaarFrontFile = File(pickedFile.path);
+            _aadhaarFrontFile = pickedFile;
           } else {
-            _aadhaarBackFile = File(pickedFile.path);
+            _aadhaarBackFile = pickedFile;
           }
         });
       }
@@ -630,7 +630,9 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
                 CircleAvatar(
                   radius: 50,
                   backgroundColor: Colors.grey.shade200,
-                  backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null,
+                  backgroundImage: _imageFile != null
+                      ? NetworkImage(_imageFile.path)
+                      : null,
                   child: _imageFile == null
                       ? const Icon(Icons.person, size: 50, color: Colors.grey)
                       : null,
@@ -926,13 +928,13 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
 
     try {
       if (_imageFile != null) {
-        photoUrl = await _repository.uploadFile(_imageFile!.path, 'teacher_photo');
+        photoUrl = await _repository.uploadFile(_imageFile, 'teacher_photo');
       }
       if (_aadhaarFrontFile != null) {
-        aadhaarFrontUrl = await _repository.uploadFile(_aadhaarFrontFile!.path, 'teacher_aadhaar_front');
+        aadhaarFrontUrl = await _repository.uploadFile(_aadhaarFrontFile, 'teacher_aadhaar_front');
       }
       if (_aadhaarBackFile != null) {
-        aadhaarBackUrl = await _repository.uploadFile(_aadhaarBackFile!.path, 'teacher_aadhaar_back');
+        aadhaarBackUrl = await _repository.uploadFile(_aadhaarBackFile, 'teacher_aadhaar_back');
       }
     } catch (e) {
       debugPrint("Error uploading teacher files: $e");
@@ -974,7 +976,7 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
   }
 
 
-  Widget _buildAadhaarPicker(String label, File? file, VoidCallback onTap) {
+  Widget _buildAadhaarPicker(String label, dynamic file, VoidCallback onTap) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -993,7 +995,7 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
             child: file != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(file, fit: BoxFit.cover),
+                    child: Image.network(file.path, fit: BoxFit.cover),
                   )
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,

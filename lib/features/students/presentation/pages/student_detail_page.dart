@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:jayasha_childrens_academy/core/theme/app_colors.dart';
 import 'package:jayasha_childrens_academy/core/models/student_admission.dart';
@@ -11,8 +14,10 @@ import 'package:jayasha_childrens_academy/core/utils/pdf_generator.dart';
 import 'package:jayasha_childrens_academy/features/certificates/presentation/pages/id_card_editor_page.dart';
 import 'package:jayasha_childrens_academy/features/exams/data/repositories/exam_repository.dart';
 import 'package:jayasha_childrens_academy/features/fees/presentation/widgets/add_payment_dialog.dart';
+import 'package:jayasha_childrens_academy/core/utils/platform_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
+import 'package:jayasha_childrens_academy/core/network/api_config.dart';
 
 class StudentDetailPage extends StatefulWidget {
   final StudentAdmission student;
@@ -41,6 +46,9 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
   late TextEditingController _contactController;
   late TextEditingController _addressController;
   String? _selectedGender;
+
+  XFile? _newPhoto;
+  Uint8List? _newPhotoBytes;
 
   String _getHumanReadableError(dynamic e) {
     final error = e.toString().toLowerCase();
@@ -93,6 +101,21 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
     _contactController = TextEditingController(text: widget.student.guardianPhone);
     _addressController = TextEditingController(text: widget.student.address);
     _selectedGender = widget.student.gender;
+    _newPhoto = null;
+    _newPhotoBytes = null;
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      setState(() {
+        _newPhoto = image;
+        _newPhotoBytes = bytes;
+      });
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -117,7 +140,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
         academicSessionId: widget.student.academicSessionId,
       );
 
-      final result = await studentRepo.updateStudent(widget.student.id!, updatedAdmission);
+      final result = await studentRepo.updateStudent(widget.student.id!, updatedAdmission, photo: _newPhoto);
 
       if (result['success']) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -166,6 +189,8 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    final bool isDesktop = PlatformUtils.isDesktop(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -221,30 +246,62 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildDetailsTab(),
-          _buildFeesTab(),
+          _buildDetailsTab(isDesktop),
+          _buildFeesTab(isDesktop),
         ],
       ),
     );
   }
 
-  Widget _buildDetailsTab() {
+  Widget _buildDetailsTab(bool isDesktop) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isDesktop ? 24 : 16),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
           child: Column(
             children: [
+              Center(
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: isDesktop ? 60 : 50,
+                      backgroundColor: Colors.grey.shade200,
+                      backgroundImage: _newPhotoBytes != null
+                          ? MemoryImage(_newPhotoBytes!)
+                          : (widget.student.photoPath != null
+                              ? NetworkImage('${ApiConfig.baseUrl}/${widget.student.photoPath}')
+                              : null) as ImageProvider?,
+                      child: _newPhotoBytes == null && widget.student.photoPath == null
+                          ? Icon(Icons.person, size: isDesktop ? 60 : 50, color: Colors.grey)
+                          : null,
+                    ),
+                    if (_isEditing)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: CircleAvatar(
+                          backgroundColor: AppColors.primary,
+                          radius: 20,
+                          child: IconButton(
+                            icon: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
+                            onPressed: _pickImage,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
               _buildSectionCard(
                 'Personal Information',
                 [
-                  _buildDetailRow('Full Name', widget.student.name, controller: _nameController),
-                  _buildDetailRow('Admission No', widget.student.admissionNumber, readOnly: true),
-                  _buildDetailRow('Roll Number', widget.student.rollNumber ?? 'Not Assigned', controller: _rollNumberController),
-                  _buildDetailRow('Section', widget.student.section ?? 'N/A', controller: _sectionController),
-                  _buildDetailRow('Date of Birth', widget.student.dob, controller: _dobController, isDate: true),
-                  _buildDetailRow('Gender', widget.student.gender, isGender: true),
+                  _buildDetailRow('Full Name', widget.student.name, controller: _nameController, isDesktop: isDesktop),
+                  _buildDetailRow('Admission No', widget.student.admissionNumber, readOnly: true, isDesktop: isDesktop),
+                  _buildDetailRow('Roll Number', widget.student.rollNumber ?? 'Not Assigned', controller: _rollNumberController, isDesktop: isDesktop),
+                  _buildDetailRow('Section', widget.student.section ?? 'N/A', controller: _sectionController, isDesktop: isDesktop),
+                  _buildDetailRow('Date of Birth', widget.student.dob, controller: _dobController, isDate: true, isDesktop: isDesktop),
+                  _buildDetailRow('Gender', widget.student.gender, isGender: true, isDesktop: isDesktop),
                 ],
                 action: !_isEditing ? IconButton(
                   icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
@@ -256,17 +313,17 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
               _buildSectionCard(
                 'Parent Details',
                 [
-                  _buildDetailRow('Father\'s Name', widget.student.fatherName, controller: _fatherNameController),
-                  _buildDetailRow('Mother\'s Name', widget.student.motherName, controller: _motherNameController),
-                  _buildDetailRow('Contact Number', widget.student.guardianPhone, controller: _contactController),
-                  _buildDetailRow('Address', widget.student.address, controller: _addressController, maxLines: 3),
+                  _buildDetailRow('Father\'s Name', widget.student.fatherName, controller: _fatherNameController, isDesktop: isDesktop),
+                  _buildDetailRow('Mother\'s Name', widget.student.motherName, controller: _motherNameController, isDesktop: isDesktop),
+                  _buildDetailRow('Contact Number', widget.student.guardianPhone, controller: _contactController, isDesktop: isDesktop),
+                  _buildDetailRow('Address', widget.student.address, controller: _addressController, maxLines: 3, isDesktop: isDesktop),
                 ],
               ),
               const SizedBox(height: 20),
               _buildSectionCard(
                 'Academic Record',
                 [
-                  _buildDetailRow('Admission Date', widget.student.admissionDate, readOnly: true),
+                  _buildDetailRow('Admission Date', widget.student.admissionDate, readOnly: true, isDesktop: isDesktop),
                 ],
               ),
             ],
@@ -276,7 +333,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
     );
   }
 
-  Widget _buildFeesTab() {
+  Widget _buildFeesTab(bool isDesktop) {
     if (_isLoadingFees) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -284,7 +341,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -321,7 +378,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
                   itemCount: _payments.length,
                   itemBuilder: (context, index) {
                     final payment = _payments[index];
@@ -332,6 +389,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
                       'PAID',
                       DateFormat('dd MMM yyyy, hh:mm a').format(payment.date),
                       payment: payment,
+                      isDesktop: isDesktop,
                     );
                   },
                 ),
@@ -340,38 +398,39 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
     );
   }
 
-  Widget _buildFeeRow(BuildContext context, String title, String amount, String status, String date, {required FeePayment payment}) {
+  Widget _buildFeeRow(BuildContext context, String title, String amount, String status, String date, {required FeePayment payment, bool isDesktop = true}) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+      padding: EdgeInsets.symmetric(vertical: 14, horizontal: isDesktop ? 20 : 10),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.receipt_long_outlined, size: 20, color: AppColors.textSecondary),
-          const SizedBox(width: 16),
+          Icon(Icons.receipt_long_outlined, size: isDesktop ? 20 : 18, color: AppColors.textSecondary),
+          SizedBox(width: isDesktop ? 16 : 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                Text(date, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: isDesktop ? 14 : 12)),
+                Text(date, style: TextStyle(fontSize: isDesktop ? 11 : 10, color: AppColors.textSecondary)),
               ],
             ),
           ),
-          Text(amount, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          const SizedBox(width: 24),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(4),
+          Text(amount, style: TextStyle(fontWeight: FontWeight.bold, fontSize: isDesktop ? 15 : 13)),
+          SizedBox(width: isDesktop ? 24 : 12),
+          if (isDesktop)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text('PAID', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
             ),
-            child: const Text('PAID', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-          ),
-          const SizedBox(width: 12),
+          SizedBox(width: isDesktop ? 12 : 4),
           IconButton(
-            icon: const Icon(Icons.download_outlined, size: 20, color: AppColors.primary),
+            icon: Icon(Icons.download_outlined, size: isDesktop ? 20 : 18, color: AppColors.primary),
             onPressed: () async {
               try {
                 final dashboardRepo = Provider.of<DashboardRepository>(context, listen: false);
@@ -443,6 +502,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
     bool isDate = false,
     bool isGender = false,
     int maxLines = 1,
+    bool isDesktop = true,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -450,12 +510,13 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
         crossAxisAlignment: maxLines > 1 ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           SizedBox(
-            width: 140,
+            width: isDesktop ? 140 : 100,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
+                fontSize: isDesktop ? 14 : 12,
               ),
             ),
           ),
@@ -465,9 +526,10 @@ class _StudentDetailPageState extends State<StudentDetailPage> with SingleTicker
                 ? _buildEditableField(label, controller, isDate, isGender, maxLines)
                 : Text(
                     value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary,
+                      fontSize: isDesktop ? 14 : 13,
                     ),
                   ),
           ),

@@ -1,3 +1,4 @@
+import 'package:image_picker/image_picker.dart';
 import 'package:jayasha_childrens_academy/core/models/teacher.dart';
 import 'package:jayasha_childrens_academy/core/models/salary_record.dart';
 import 'package:jayasha_childrens_academy/core/models/leave_record.dart';
@@ -5,8 +6,8 @@ import 'package:jayasha_childrens_academy/core/models/leave_record.dart';
 abstract class StaffRepository {
   List<Teacher> get teachers;
   Future<List<Teacher>> getTeachers();
-  Future<bool> addTeacher(Teacher teacher);
-  Future<bool> updateTeacher(String id, Teacher teacher);
+  Future<bool> addTeacher(Teacher teacher, {XFile? photo});
+  Future<bool> updateTeacher(String id, Teacher teacher, {XFile? photo});
   Future<bool> deleteTeacher(String id);
 
   // Salary Routes

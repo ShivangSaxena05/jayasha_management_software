@@ -113,7 +113,7 @@ class _SchoolDetailsPageState extends State<SchoolDetailsPage> {
                   const SizedBox(height: 32),
                   _buildTextField('School Name', _nameController, Icons.school),
                   const SizedBox(height: 16),
-                  _buildTextField('Affiliation Line', _affiliationController, Icons.verified, hint: 'e.g. Affiliated to CBSE, New Delhi'),
+                  _buildTextField('Affiliation Line', _affiliationController, Icons.verified, hint: 'e.g. Affiliated to UP Board'),
                   const SizedBox(height: 16),
                   _buildTextField('Address', _addressController, Icons.location_on, maxLines: 2),
                   const SizedBox(height: 16),
